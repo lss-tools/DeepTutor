@@ -18,8 +18,10 @@ import {
 
 export default function SettingsNav({ onNavigate }: { onNavigate?: () => void }) {
   const { t, i18n } = useTranslation()
-  const zh = i18n.language?.toLowerCase().startsWith('zh')
-  const tr = (label: Lang) => (zh ? label.zh : label.en)
+  const lang = i18n.language?.toLowerCase() ?? 'en'
+  const zh = lang.startsWith('zh')
+  const ru = lang.startsWith('ru')
+  const tr = (label: Lang) => (zh ? label.zh : ru ? label.ru : label.en)
   const pathname = usePathname()
   const access = useSettingsAccess()
   const pages = visibleSettingsPages(access)
@@ -31,8 +33,10 @@ export default function SettingsNav({ onNavigate }: { onNavigate?: () => void })
     [
       page.label.en,
       page.label.zh,
+      page.label.ru,
       page.blurb.en,
       page.blurb.zh,
+      page.blurb.ru,
       page.key,
       page.key === 'connections' ? 'API Key token base url 密钥 凭据 地址 供应商' : '',
       ...Object.values(settingsPageLabel(page.key, page.label)),
@@ -42,7 +46,7 @@ export default function SettingsNav({ onNavigate }: { onNavigate?: () => void })
       .includes(needle)
   )
   const groups = needle
-    ? [{ label: { en: 'Search results', zh: '搜索结果' }, pages: matches }]
+    ? [{ label: { en: 'Search results', zh: '搜索结果', ru: 'Результаты поиска' }, pages: matches }]
     : SETTINGS_PAGE_GROUPS.map(group => ({
         ...group,
         pages: group.keys.flatMap(key => {

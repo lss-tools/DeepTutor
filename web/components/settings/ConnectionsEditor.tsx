@@ -39,15 +39,15 @@ import { inputClass, selectClass, selectOptionClass } from "./shared";
  * who want a different key per service simply never make a connection.
  */
 
-const SERVICE_LABEL: Record<ServiceName, { en: string; zh: string }> = {
-  llm: { en: "LLM", zh: "LLM" },
-  task: { en: "Task model", zh: "任务模型" },
-  embedding: { en: "Embedding", zh: "嵌入模型" },
-  search: { en: "Search", zh: "搜索" },
-  tts: { en: "Text-to-Speech", zh: "语音合成" },
-  stt: { en: "Speech-to-Text", zh: "语音识别" },
-  imagegen: { en: "Image", zh: "文生图" },
-  videogen: { en: "Video", zh: "文生视频" },
+const SERVICE_LABEL: Record<ServiceName, { en: string; zh: string; ru: string }> = {
+  llm: { en: "LLM", zh: "LLM", ru: "LLM" },
+  task: { en: "Task model", zh: "任务模型", ru: "Модель задач" },
+  embedding: { en: "Embedding", zh: "嵌入模型", ru: "Эмбеддинг" },
+  search: { en: "Search", zh: "搜索", ru: "Поиск" },
+  tts: { en: "Text-to-Speech", zh: "语音合成", ru: "Синтез речи" },
+  stt: { en: "Speech-to-Text", zh: "语音识别", ru: "Распознавание речи" },
+  imagegen: { en: "Image", zh: "文生图", ru: "Картинка" },
+  videogen: { en: "Video", zh: "文生视频", ru: "Видео" },
 };
 
 const SERVICE_HREF: Record<ServiceName, string> = {
@@ -151,7 +151,11 @@ export function ConnectionsEditor() {
   }
 
   const label = (service: ServiceName) =>
-    zh ? SERVICE_LABEL[service].zh : SERVICE_LABEL[service].en;
+    zh
+      ? SERVICE_LABEL[service].zh
+      : i18n.language?.toLowerCase().startsWith("ru")
+        ? SERVICE_LABEL[service].ru
+        : SERVICE_LABEL[service].en;
 
   return (
     <div>
@@ -535,7 +539,11 @@ function AddConnectionPanel({
   );
 
   const label = (service: ServiceName) =>
-    zh ? SERVICE_LABEL[service].zh : SERVICE_LABEL[service].en;
+    zh
+      ? SERVICE_LABEL[service].zh
+      : i18n.language?.toLowerCase().startsWith("ru")
+        ? SERVICE_LABEL[service].ru
+        : SERVICE_LABEL[service].en;
 
   const choose = (next: string) => {
     setProvider(next);

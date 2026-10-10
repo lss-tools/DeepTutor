@@ -21,7 +21,7 @@ import {
 
 const REMOTE_HERMES_KIND = "hermes_remote";
 
-type Lang = { zh: string; en: string };
+type Lang = { zh: string; en: string; ru: string };
 
 function backendLabel(kind: string): string {
   if (kind === "claude_code") return "Claude Code";
@@ -40,8 +40,12 @@ function backendLabel(kind: string): string {
 
 export default function ConnectedAgents() {
   const { i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((l: Lang) => (zh ? l.zh : l.en), [zh]);
+  const lang = i18n.language?.toLowerCase() ?? "en";
+  const tr = useCallback(
+    (l: Lang) =>
+      lang.startsWith("zh") ? l.zh : lang.startsWith("ru") ? l.ru : l.en,
+    [lang],
+  );
 
   const [backends, setBackends] = useState<SubagentBackendInfo[]>([]);
   const [connections, setConnections] = useState<SubagentConnection[]>([]);
@@ -80,6 +84,7 @@ export default function ConnectedAgents() {
           tr({
             zh: `断开「${name}」？这只会移除连接，不影响本机的智能体配置。`,
             en: `Disconnect “${name}”? This only removes the connection; your local agent is untouched.`,
+            ru: `Отключить «${name}»? Убирается только связь; локальная настройка агента остаётся.`,
           }),
         )
       )
@@ -98,10 +103,11 @@ export default function ConnectedAgents() {
   return (
     <section className="space-y-4">
       <SpaceSectionHeader
-        title={tr({ zh: "连接的智能体", en: "Connected agents" })}
+        title={tr({ zh: "连接的智能体", en: "Connected agents", ru: "Подключённые агенты" })}
         description={tr({
           zh: "把本机智能体或已配置的远程 Hermes 网关接进来，在对话中选中后直接向它提问——运行过程会实时展示。",
           en: "Bring in a supported local agent or a configured remote Hermes gateway. Select it in chat to consult it directly and see its run live.",
+          ru: "Подключите локального агента или удалённый шлюз Hermes: выберите его в чате, задайте вопрос и смотрите за работой вживую.",
         })}
         action={
           canConnect ? (
@@ -111,7 +117,7 @@ export default function ConnectedAgents() {
               className={pageActionClass()}
             >
               <Plus className="h-3.5 w-3.5" />
-              {tr({ zh: "连接智能体", en: "Connect agent" })}
+              {tr({ zh: "连接智能体", en: "Connect agent", ru: "Подключить агента" })}
             </button>
           ) : null
         }
@@ -120,13 +126,14 @@ export default function ConnectedAgents() {
       {loading ? (
         <div className="flex items-center gap-2 px-1 text-[12px] text-[var(--muted-foreground)]">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          {tr({ zh: "检测可用智能体…", en: "Detecting available agents…" })}
+          {tr({ zh: "检测可用智能体…", en: "Detecting available agents…", ru: "Ищу доступных агентов…" })}
         </div>
       ) : !canConnect ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--card)]/40 px-4 py-5 text-[12.5px] leading-relaxed text-[var(--muted-foreground)]">
           {tr({
             zh: "未检测到可用的本机智能体或已配置的远程 Hermes 网关。安装并登录受支持的 CLI 或配置远程网关，即可连接。",
             en: "No supported local agent or configured remote Hermes gateway is available. Set up a local CLI or configure the gateway to connect one.",
+            ru: "Доступных локальных агентов и шлюза Hermes нет. Установите и настройте поддерживаемый CLI или настройте шлюз — тогда подключите.",
           })}
         </div>
       ) : connections.length === 0 ? (
@@ -134,6 +141,7 @@ export default function ConnectedAgents() {
           {tr({
             zh: "尚未连接任何智能体。点击「连接智能体」接入本机智能体或远程 Hermes 网关。",
             en: "No agents connected yet. Click “Connect agent” to add a local agent or remote Hermes gateway.",
+            ru: "Агенты ещё не подключены. Нажмите «Подключить агента» и добавьте локального агента или шлюз Hermes.",
           })}
         </div>
       ) : (
@@ -161,12 +169,12 @@ export default function ConnectedAgents() {
                     {conn.cwd ? ` · ${conn.cwd}` : ""}
                   </div>
                 </div>
-                <Tooltip label={tr({ zh: "断开", en: "Disconnect" })} side="top">
+                <Tooltip label={tr({ zh: "断开", en: "Disconnect", ru: "Отключить" })} side="top">
                   <button
                     type="button"
                     onClick={() => void handleDisconnect(conn.name)}
                     disabled={busyName === conn.name}
-                    aria-label={tr({ zh: "断开", en: "Disconnect" })}
+                    aria-label={tr({ zh: "断开", en: "Disconnect", ru: "Отключить" })}
                     className="rounded-lg border border-[var(--border)]/50 p-2 text-[var(--muted-foreground)] transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50 dark:hover:border-red-900 dark:hover:text-red-400"
                   >
                     {busyName === conn.name ? (
@@ -227,7 +235,7 @@ function ConnectModal({
   const submit = useCallback(async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError(tr({ zh: "请填写名称。", en: "Please enter a name." }));
+      setError(tr({ zh: "请填写名称。", en: "Please enter a name.", ru: "Введите название." }));
       return;
     }
     if (existingNames.includes(trimmed)) {
@@ -235,6 +243,7 @@ function ConnectModal({
         tr({
           zh: "已存在同名连接。",
           en: "A connection with this name already exists.",
+          ru: "Подключение с таким названием уже есть.",
         }),
       );
       return;
@@ -266,13 +275,13 @@ function ConnectModal({
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-serif text-[16px] font-semibold tracking-tight text-[var(--foreground)]">
-            {tr({ zh: "连接智能体", en: "Connect an agent" })}
+            {tr({ zh: "连接智能体", en: "Connect an agent", ru: "Подключить агента" })}
           </h2>
           <button
             type="button"
             onClick={onClose}
             className="rounded-lg p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)]/60 hover:text-[var(--foreground)]"
-            aria-label={tr({ zh: "关闭", en: "Close" })}
+            aria-label={tr({ zh: "关闭", en: "Close", ru: "Закрыть" })}
           >
             <X size={16} />
           </button>
@@ -281,7 +290,7 @@ function ConnectModal({
         <div className="space-y-3.5">
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--foreground)]">
-              {tr({ zh: "智能体", en: "Agent" })}
+              {tr({ zh: "智能体", en: "Agent", ru: "Агент" })}
             </label>
             {/* Two per row; the detected backend list is registry-driven. */}
             <div className="grid grid-cols-2 gap-2">
@@ -309,7 +318,7 @@ function ConnectModal({
 
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-[var(--foreground)]">
-              {tr({ zh: "名称", en: "Name" })}
+              {tr({ zh: "名称", en: "Name", ru: "Название" })}
             </label>
             <input
               autoFocus
@@ -320,6 +329,7 @@ function ConnectModal({
               placeholder={tr({
                 zh: "例如：我的代码助手",
                 en: "e.g. My coding agent",
+                ru: "например: Мой помощник для кода",
               })}
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-[13px] text-[var(--foreground)] outline-none focus:border-[var(--ring)]"
             />
@@ -331,6 +341,7 @@ function ConnectModal({
                 {tr({
                   zh: "工作目录（可选）",
                   en: "Working directory (optional)",
+                  ru: "Рабочий каталог (необязательно)",
                 })}
               </label>
               <input
@@ -339,6 +350,7 @@ function ConnectModal({
                 placeholder={tr({
                   zh: "例如：/Users/you/project —— 智能体将在此目录运行",
                   en: "e.g. /Users/you/project — the agent runs here",
+                  ru: "например: /Users/you/project — агент будет работать здесь",
                 })}
                 className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-[12px] text-[var(--foreground)] outline-none focus:border-[var(--ring)]"
               />
@@ -358,7 +370,7 @@ function ConnectModal({
             onClick={onClose}
             className="rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           >
-            {tr({ zh: "取消", en: "Cancel" })}
+            {tr({ zh: "取消", en: "Cancel", ru: "Отмена" })}
           </button>
           <button
             type="button"
@@ -371,7 +383,7 @@ function ConnectModal({
             ) : (
               <Plug className="h-3.5 w-3.5" />
             )}
-            {tr({ zh: "连接", en: "Connect" })}
+            {tr({ zh: "连接", en: "Connect", ru: "Подключить" })}
           </button>
         </div>
       </div>

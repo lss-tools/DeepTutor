@@ -21,7 +21,9 @@ export function LearnerProfileCard({ profile }: { profile: LearnerProfile | null
   const teachFirst = profile?.teaching_strategy === "teach_first"
     ? i18n.language?.toLowerCase().startsWith("zh")
       ? TEACH_FIRST_PROFILE_LABEL.zh
-      : TEACH_FIRST_PROFILE_LABEL.en
+      : i18n.language?.toLowerCase().startsWith("ru")
+        ? TEACH_FIRST_PROFILE_LABEL.ru
+        : TEACH_FIRST_PROFILE_LABEL.en
     : "";
   const teachingPreference = [profile?.preferences?.trim(), teachFirst]
     .filter(Boolean)

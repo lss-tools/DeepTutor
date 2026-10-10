@@ -70,9 +70,9 @@ type ToolSection = {
 
 // Display labels for capability-owned tool sections, keyed by the backend's
 // capability id. Falls back to the raw id for any unmapped capability.
-const CAPABILITY_LABELS: Record<string, { zh: string; en: string }> = {
-  solve: { zh: "深度解题", en: "Deep Solve" },
-  mastery: { zh: "精通路径", en: "Mastery Path" },
+const CAPABILITY_LABELS: Record<string, { zh: string; en: string; ru: string }> = {
+  solve: { zh: "深度解题", en: "Deep Solve", ru: "Глубокое решение" },
+  mastery: { zh: "精通路径", en: "Mastery Path", ru: "Путь к мастерству" },
 };
 
 export default function ToolsSettingsPage() {
@@ -123,6 +123,9 @@ export default function ToolsSettingsPage() {
   const sections = useMemo<ToolSection[] | null>(() => {
     if (!tools) return null;
     const zh = language === "zh";
+    const ru = language === "ru";
+    const tr = (copy: { zh: string; en: string; ru: string }) =>
+      zh ? copy.zh : ru ? copy.ru : copy.en;
     // Buckets: toggleable (体验增强) first, then locked-on built-ins, then one
     // section per capability for its owned tools. Backend order is preserved
     // within each bucket (mirrors USER_TOGGLEABLE_TOOL_NAMES / the
@@ -146,31 +149,41 @@ export default function ToolsSettingsPage() {
     if (experience.length) {
       out.push({
         key: "experience",
-        label: zh ? "体验增强" : "Experience Enhancement",
-        hint: zh
-          ? "用户可选；按需为 chat agent 开启或关闭。"
-          : "User-toggleable. Switch on or off to shape the chat agent's behavior.",
+        label: tr({ zh: "体验增强", en: "Experience Enhancement", ru: "Улучшения опыта" }),
+        hint: tr({
+          zh: "用户可选；按需为 chat agent 开启或关闭。",
+          en: "User-toggleable. Switch on or off to shape the chat agent's behavior.",
+          ru: "По желанию: включайте и выключайте для агента чата.",
+        }),
         tools: experience,
       });
     }
     if (builtin.length) {
       out.push({
         key: "builtin",
-        label: zh ? "内置工具" : "Built-in Tools",
-        hint: zh
-          ? "Chat agent 在需要时自动挂载，无需手动开关。"
-          : "Mounted automatically by the chat agent when needed. Not user-toggleable.",
+        label: tr({ zh: "内置工具", en: "Built-in Tools", ru: "Встроенные инструменты" }),
+        hint: tr({
+          zh: "Chat agent 在需要时自动挂载，无需手动开关。",
+          en: "Mounted automatically by the chat agent when needed. Not user-toggleable.",
+          ru: "Агент чата подключает их сам, когда нужно. Вручную не переключаются.",
+        }),
         tools: builtin,
       });
     }
     for (const [cap, list] of capabilities) {
-      const label = CAPABILITY_LABELS[cap]?.[zh ? "zh" : "en"] ?? cap;
+      const label = CAPABILITY_LABELS[cap]?.[zh ? "zh" : ru ? "ru" : "en"] ?? cap;
       out.push({
         key: `cap:${cap}`,
-        label: zh ? `${label} · 能力工具` : `${label} · Capability Tools`,
-        hint: zh
-          ? "该能力的专属工具，仅在此能力运行时挂载。"
-          : "Tools specific to this capability; mounted only when it runs.",
+        label: tr({
+          zh: `${label} · 能力工具`,
+          en: `${label} · Capability Tools`,
+          ru: `${label} · инструменты возможности`,
+        }),
+        hint: tr({
+          zh: "该能力的专属工具，仅在此能力运行时挂载。",
+          en: "Tools specific to this capability; mounted only when it runs.",
+          ru: "Инструменты этой возможности; подключаются только при её запуске.",
+        }),
         tools: list,
       });
     }

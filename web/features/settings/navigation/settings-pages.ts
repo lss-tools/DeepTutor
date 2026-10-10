@@ -11,24 +11,24 @@ import type { LucideIcon } from 'lucide-react'
 import type { SettingsAccess } from './settings-access'
 
 export const SETTINGS_PAGE_GROUPS: { label: Lang; keys: string[] }[] = [
-  { label: { en: 'Personal', zh: '个人' }, keys: ['general', 'workspace', 'data-migration', 'appearance', 'usage'] },
+  { label: { en: 'Personal', zh: '个人', ru: 'Личное' }, keys: ['general', 'workspace', 'data-migration', 'appearance', 'usage'] },
   {
-    label: { en: 'Models & services', zh: '模型与服务' },
+    label: { en: 'Models & services', zh: '模型与服务', ru: 'Модели и сервисы' },
     keys: ['connections', 'llm', 'task-models', 'embedding', 'search', 'voice', 'multimodal'],
   },
   {
-    label: { en: 'Learning & conversation', zh: '学习与对话' },
+    label: { en: 'Learning & conversation', zh: '学习与对话', ru: 'Обучение и чат' },
     keys: ['starters', 'attachments', 'video-learning', 'learner-profile', 'progress', 'guardian', 'memory'],
   },
   {
-    label: { en: 'Features & integrations', zh: '功能与集成' },
+    label: { en: 'Features & integrations', zh: '功能与集成', ru: 'Функции и интеграции' },
     keys: ['tools', 'capabilities', 'agent-claude-code', 'knowledge'],
   },
   {
-    label: { en: 'System', zh: '系统' },
+    label: { en: 'System', zh: '系统', ru: 'Система' },
     keys: ['network', 'status', 'about'],
   },
-  { label: { en: 'Archived', zh: '已归档' }, keys: ['archive'] },
+  { label: { en: 'Archived', zh: '已归档', ru: 'Архив' }, keys: ['archive'] },
 ]
 
 /**
@@ -62,34 +62,35 @@ export function settingsPageFamily(key: string): string[] {
 const extraPages: SettingsLeaf[] = [
   {
     key: 'progress',
-    label: { en: 'Learning progress', zh: '学习进度' },
-    blurb: { en: 'Reading progress and recent learning actions', zh: '阅读进度与近期学习操作' },
+    label: { en: 'Learning progress', zh: '学习进度', ru: 'Учебный прогресс' },
+    blurb: { en: 'Reading progress and recent learning actions', zh: '阅读进度与近期学习操作', ru: 'Прогресс чтения и недавние занятия' },
     icon: BarChart3,
     href: '/settings/progress',
     tile: '',
   },
   {
     key: 'data-migration',
-    label: { en: 'Data migration', zh: '数据迁移' },
-    blurb: { en: 'Discover, migrate and export learning data', zh: '查找、迁移和导出学习数据' },
+    label: { en: 'Data migration', zh: '数据迁移', ru: 'Перенос данных' },
+    blurb: { en: 'Discover, migrate and export learning data', zh: '查找、迁移和导出学习数据', ru: 'Найти, перенести и экспортировать учебные данные' },
     icon: Archive,
     href: '/settings/data-migration',
     tile: '',
   },
   {
     key: 'usage',
-    label: { en: 'Usage statistics', zh: '用量统计' },
-    blurb: { en: 'Model usage and conversation activity', zh: '模型用量与对话活跃情况' },
+    label: { en: 'Usage statistics', zh: '用量统计', ru: 'Статистика использования' },
+    blurb: { en: 'Model usage and conversation activity', zh: '模型用量与对话活跃情况', ru: 'Использование моделей и активность в чатах' },
     icon: BarChart3,
     href: '/settings/usage',
     tile: '',
   },
   {
     key: 'archive',
-    label: { en: 'Archived chats', zh: '已归档的聊天' },
+    label: { en: 'Archived chats', zh: '已归档的聊天', ru: 'Архив чатов' },
     blurb: {
       en: 'Search, unarchive, or permanently delete archived conversations',
       zh: '搜索、取消归档或永久删除已归档的对话',
+      ru: 'Поиск, возврат или удаление архивных чатов',
     },
     icon: Archive,
     href: '/settings/archive',
@@ -97,10 +98,11 @@ const extraPages: SettingsLeaf[] = [
   },
   {
     key: 'general',
-    label: { en: 'General', zh: '常规' },
+    label: { en: 'General', zh: '常规', ru: 'Общее' },
     blurb: {
       en: 'Interface language, response language, and setup help',
       zh: '界面语言、回复语言与配置帮助',
+      ru: 'Язык интерфейса, язык ответов и помощь с настройкой',
     },
     icon: Settings2,
     href: '/settings/general',
@@ -108,10 +110,11 @@ const extraPages: SettingsLeaf[] = [
   },
   {
     key: 'status',
-    label: { en: 'Runtime status', zh: '运行状态' },
+    label: { en: 'Runtime status', zh: '运行状态', ru: 'Состояние сервисов' },
     blurb: {
       en: 'Service readiness, diagnostics, and memory usage',
       zh: '服务就绪情况、诊断与内存占用',
+      ru: 'Готовность сервисов, диагностика и память',
     },
     icon: Activity,
     href: '/settings/status',
@@ -131,11 +134,11 @@ export function visibleSettingsPages(access: SettingsAccess): SettingsLeaf[] {
 }
 
 export function settingsPageLabel(key: string, fallback: Lang): Lang {
-  if (key === 'llm') return { en: 'Language models', zh: '语言模型' }
-  if (key === 'agent-claude-code') return { en: 'Partners & agents', zh: '伙伴与智能体' }
-  if (key === 'starters') return { en: 'Conversation', zh: '对话' }
-  if (key === 'connections') return { en: 'Providers', zh: '提供方' }
-  if (key === 'knowledge') return { en: 'Knowledge & documents', zh: '知识与文档' }
+  if (key === 'llm') return { en: 'Language models', zh: '语言模型', ru: 'Языковые модели' }
+  if (key === 'agent-claude-code') return { en: 'Partners & agents', zh: '伙伴与智能体', ru: 'Партнёры и агенты' }
+  if (key === 'starters') return { en: 'Conversation', zh: '对话', ru: 'Чат' }
+  if (key === 'connections') return { en: 'Providers', zh: '提供方', ru: 'Провайдеры' }
+  if (key === 'knowledge') return { en: 'Knowledge & documents', zh: '知识与文档', ru: 'Знания и документы' }
   return fallback
 }
 

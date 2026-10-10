@@ -39,7 +39,7 @@ import { scopedUrl } from "@/lib/workspace-scope";
  * section page (which keeps the mini-nav for lateral movement).
  */
 
-type Lang = { zh: string; en: string };
+type Lang = { zh: string; en: string; ru: string };
 
 type DashKey =
   | "knowledge"
@@ -91,18 +91,19 @@ interface DashboardGroup {
 
 const GROUPS: DashboardGroup[] = [
   {
-    label: { zh: "对话与资料", en: "Conversations & Materials" },
+    label: { zh: "对话与资料", en: "Conversations & Materials", ru: "Чаты и материалы" },
     items: [
       {
         key: "chat_history",
         href: "/space/chat-history",
         icon: History,
-        title: { zh: "聊天历史", en: "Chat History" },
+        title: { zh: "聊天历史", en: "Chat History", ru: "История чатов" },
         blurb: {
           zh: "回顾并继续此前的对话。",
           en: "Review and reopen previous conversations.",
+          ru: "Вернитесь к прошлым чатам и продолжите их.",
         },
-        unit: { zh: "段对话", en: "conversations" },
+        unit: { zh: "段对话", en: "conversations", ru: "чатов" },
         tile: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
         load: async () => (await listSessions(200, 0, { force: true })).length,
       },
@@ -110,12 +111,13 @@ const GROUPS: DashboardGroup[] = [
         key: "notebooks",
         href: "/notebooks",
         icon: NotebookPen,
-        title: { zh: "笔记本", en: "Notebooks" },
+        title: { zh: "笔记本", en: "Notebooks", ru: "Блокноты" },
         blurb: {
           zh: "整理来自对话、研究、智能写作等的产出。",
           en: "Organize saved outputs from chat, research, Co-Writer, and more.",
+          ru: "Сохранённые результаты чатов, исследований и соавтора.",
         },
-        unit: { zh: "个笔记本", en: "notebooks" },
+        unit: { zh: "个笔记本", en: "notebooks", ru: "блокнотов" },
         tile: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
         load: async () => (await listNotebooks()).length,
       },
@@ -123,20 +125,21 @@ const GROUPS: DashboardGroup[] = [
         key: "journal",
         href: "/space/journal",
         icon: NotebookPen,
-        title: { zh: "学习日志", en: "Learning journal" },
-        blurb: { zh: "查看当前目标、上次会话交接和已确认的学习记录。", en: "Inspect your mission, session handoff and confirmed records." },
+        title: { zh: "学习日志", en: "Learning journal", ru: "Учебный журнал" },
+        blurb: { zh: "查看当前目标、上次会话交接和已确认的学习记录。", en: "Inspect your mission, session handoff and confirmed records.", ru: "Текущая цель, передачи между сессиями и подтверждённые записи." },
         tile: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
       },
       {
         key: "question_bank",
         href: "/space/questions",
         icon: ClipboardList,
-        title: { zh: "题库", en: "Question Bank" },
+        title: { zh: "题库", en: "Question Bank", ru: "Банк вопросов" },
         blurb: {
           zh: "跨会话回顾和整理测验题目。",
           en: "Review and organize quiz questions across sessions.",
+          ru: "Повторяйте и наводите порядок в вопросах между сессиями.",
         },
-        unit: { zh: "道题", en: "questions" },
+        unit: { zh: "道题", en: "questions", ru: "вопросов" },
         tile: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
         load: async () => (await listNotebookEntries({ limit: 1 })).total,
       },
@@ -144,30 +147,32 @@ const GROUPS: DashboardGroup[] = [
         key: "knowledge",
         href: "/knowledge-bases",
         icon: BookOpen,
-        title: { zh: "知识中心", en: "Knowledge Center" },
+        title: { zh: "知识中心", en: "Knowledge Center", ru: "Центр знаний" },
         blurb: {
           zh: "管理知识库与检索引擎。",
           en: "Manage knowledge bases and retrieval engines.",
+          ru: "Базы знаний и поисковые движки.",
         },
-        unit: { zh: "个知识库", en: "knowledge bases" },
+        unit: { zh: "个知识库", en: "knowledge bases", ru: "баз знаний" },
         tile: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
         load: async () => (await listKnowledgeBases({ library: true })).length,
       },
     ],
   },
   {
-    label: { zh: "个性化", en: "Personalization" },
+    label: { zh: "个性化", en: "Personalization", ru: "Персонализация" },
     items: [
       {
         key: "personas",
         href: "/space/personas",
         icon: UserRound,
-        title: { zh: "Personas", en: "Personas" },
+        title: { zh: "Personas", en: "Personas", ru: "Личности" },
         blurb: {
           zh: "可在每轮对话中套用的行为预设。",
           en: "Behavior presets you can apply per chat turn.",
+          ru: "Готовые манеры общения на каждый чат.",
         },
-        unit: { zh: "个预设", en: "personas" },
+        unit: { zh: "个预设", en: "personas", ru: "личностей" },
         tile: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
         load: async () => (await listPersonas()).length,
       },
@@ -175,12 +180,13 @@ const GROUPS: DashboardGroup[] = [
         key: "skills",
         href: "/space/skills",
         icon: Wand2,
-        title: { zh: "技能", en: "Skills" },
+        title: { zh: "技能", en: "Skills", ru: "Навыки" },
         blurb: {
           zh: "模型按需读取的能力手册。",
           en: "Capability playbooks the model reads on demand.",
+          ru: "Инструкции, которые модель читает по мере надобности.",
         },
-        unit: { zh: "个技能", en: "skills" },
+        unit: { zh: "个技能", en: "skills", ru: "навыков" },
         tile: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
         load: async () => (await listSkills()).length,
       },
@@ -188,12 +194,13 @@ const GROUPS: DashboardGroup[] = [
         key: "mcp",
         href: "/space/mcp",
         icon: Plug,
-        title: { zh: "MCP 服务", en: "MCP Services" },
+        title: { zh: "MCP 服务", en: "MCP Services", ru: "MCP-сервисы" },
         blurb: {
           zh: "连接托管 MCP 服务，把它们的工具带进对话。",
           en: "Connect hosted MCP services and bring their tools into chat.",
+          ru: "Подключите MCP-сервисы — их инструменты появятся в чате.",
         },
-        unit: { zh: "个服务", en: "services" },
+        unit: { zh: "个服务", en: "services", ru: "сервисов" },
         tile: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
         // The account's own servers only: the deployment's are shown on the page
         // but are not this reader's to count.
@@ -204,12 +211,13 @@ const GROUPS: DashboardGroup[] = [
         key: "cli_apps",
         href: "/space/cli-apps",
         icon: Terminal,
-        title: { zh: "CLI 应用", en: "CLI Apps" },
+        title: { zh: "CLI 应用", en: "CLI Apps", ru: "CLI-приложения" },
         blurb: {
           zh: "来自 CLI-Anything 目录的命令行工具，启用后对话可直接调用。",
           en: "Command-line tools from the CLI-Anything catalog, callable from chat.",
+          ru: "Инструменты командной строки из каталога CLI-Anything, доступны в чате.",
         },
-        unit: { zh: "个应用", en: "apps" },
+        unit: { zh: "个应用", en: "apps", ru: "приложений" },
         tile: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
         // What this reader can actually use, not what the deployment installed:
         // an app they were not granted is visible on the page but is not theirs.
@@ -221,26 +229,28 @@ const GROUPS: DashboardGroup[] = [
         key: "memory",
         href: "/memory",
         icon: Brain,
-        title: { zh: "记忆", en: "Memory" },
+        title: { zh: "记忆", en: "Memory", ru: "Память" },
         blurb: {
           zh: "查看与整理导师记住的偏好和学习经历。",
           en: "Review what your tutor remembers about you.",
+          ru: "Что репетитор запомнил о вас.",
         },
         tile: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
       },
     ],
   },
   {
-    label: { zh: "更多项目", en: "More Projects" },
+    label: { zh: "更多项目", en: "More Projects", ru: "Другие проекты" },
     items: [
       {
         key: "whisper",
         href: "/whisper",
         icon: Ear,
-        title: { zh: "密语", en: "Whisper" },
+        title: { zh: "密语", en: "Whisper", ru: "Whisper" },
         blurb: {
           zh: "双席位咨询练习房间：督导只对受训者耳语。",
           en: "Dual-seat practice room — the supervisor whispers to the trainee only.",
+          ru: "Тренировочная комната на двоих: наставник шепчет только ученику.",
         },
         tile: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400",
         credit: "alanguan73",
@@ -282,8 +292,12 @@ export { GROUPS as DASHBOARD_GROUPS };
 
 export default function SpaceDashboard() {
   const { i18n } = useTranslation();
-  const zh = i18n.language?.toLowerCase().startsWith("zh");
-  const tr = useCallback((l: Lang) => (zh ? l.zh : l.en), [zh]);
+  const lang = i18n.language?.toLowerCase() ?? "en";
+  const tr = useCallback(
+    (l: Lang) =>
+      lang.startsWith("zh") ? l.zh : lang.startsWith("ru") ? l.ru : l.en,
+    [lang],
+  );
 
   const [counts, setCounts] = useState<Partial<Record<DashKey, number>>>({});
 
@@ -316,10 +330,11 @@ export default function SpaceDashboard() {
   return (
     <div>
       <PageHeader
-        title={tr({ zh: "学习空间", en: "Learning Space" })}
+        title={tr({ zh: "学习空间", en: "Learning Space", ru: "Учебное пространство" })}
         description={tr({
             zh: "你的对话、智能体、笔记与题目，集中在一处 —— 从这里进入。",
             en: "Your conversations, agents, notebooks, and questions in one place — enter from here.",
+            ru: "Чаты, агенты, блокноты и вопросы в одном месте — вход отсюда.",
           })}
       />
 

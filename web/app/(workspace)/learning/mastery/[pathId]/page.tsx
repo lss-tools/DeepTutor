@@ -63,7 +63,8 @@ export default function MasteryTopicPage() {
   const pathId = String(params.pathId || "");
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const zh = Boolean(i18n.language?.toLowerCase().startsWith("zh"));
+  const lang = i18n.language?.toLowerCase() ?? "en";
+  const zh = lang.startsWith("zh");
   const [topic, setTopic] = useState<MasteryTopic | null>(null);
   const [sessions, setSessions] = useState<TopicSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -293,6 +294,7 @@ export default function MasteryTopicPage() {
   const nextCopy = NEXT_LABELS[topic.next.action] ?? {
     zh: topic.next.reason,
     en: topic.next.reason,
+    ru: topic.next.reason,
   };
   const progress = topic.map.counts.total
     ? Math.round((topic.map.counts.mastered / topic.map.counts.total) * 100)
@@ -430,8 +432,8 @@ export default function MasteryTopicPage() {
                   ? t(
                       "This goal has no outline yet. Open a session and the tutor will design one with you.",
                     )
-                  : zh
-                    ? nextCopy.zh
+                  : lang.startsWith("ru")
+                    ? nextCopy.ru
                     : nextCopy.en}
               </p>
             </div>
