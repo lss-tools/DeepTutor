@@ -4708,7 +4708,7 @@
   "Page {{page}} of {{pages}}": "Strona {{page}} z {{pages}}",
   "Import questions": "Importuj pytania",
   "Close import": "Zamknij import",
-  "Import XLSX, CSV, TSV or JSON. Up to 500 questions and 5 MB per file. XLSX uses the active sheet. Chinese and English column names are supported.": "Importuj XLSX, CSV, TSV lub JSON. Maksymalnie 500 pytań i 5 MB na plik. XLSX używa aktywnego arkusza. Obsługiwane są kolumny z nazwami w języku chińskim i angielskim.",
+  "Import XLSX, CSV, TSV or JSON. Up to 500 questions and 5 MB per file. XLSX uses the active sheet. Chinese and English column names are supported.": "Importuj bezpośrednio XLSX, CSV, TSV lub JSON albo ZIP z manifestem i folderem assets/. Do 500 pytań; manifest do 5 MB, ZIP do 64 MB. Nazwy plików wpisz w kolumnie asset.",
   "Import into": "Importuj do",
   "Download {{format}} template": "Pobierz szablon {{format}}",
   "Choose a question file": "Wybierz plik z pytaniami",

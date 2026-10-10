@@ -214,6 +214,14 @@ export interface NotebookEntry {
   difficulty: string;
   user_answer: string;
   user_answer_images?: NotebookAnswerImage[];
+  attachments?: {
+    kind: "image" | "audio" | "file";
+    name: string;
+    path: string;
+    sha256: string;
+    mime: string;
+    bytes: number;
+  }[];
   source: AssessmentSource;
   material_id: string;
   material_title: string;

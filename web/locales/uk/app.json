@@ -4726,7 +4726,7 @@
   "Page {{page}} of {{pages}}": "Сторінка {{page}} з {{pages}}",
   "Import questions": "Імпортувати запитання",
   "Close import": "Закрити імпорт",
-  "Import XLSX, CSV, TSV or JSON. Up to 500 questions and 5 MB per file. XLSX uses the active sheet. Chinese and English column names are supported.": "Імпорт XLSX, CSV, TSV або JSON. До 500 питань і 5 Мб на файл. XLSX використовує активний аркуш. Підтримуються китайські та англійські назви стовпців.",
+  "Import XLSX, CSV, TSV or JSON. Up to 500 questions and 5 MB per file. XLSX uses the active sheet. Chinese and English column names are supported.": "Імпортуйте XLSX, CSV, TSV або JSON напряму чи ZIP з одним маніфестом і папкою assets/. До 500 питань; маніфест до 5 МБ, ZIP до 64 МБ. Вкажіть назви файлів у стовпці asset.",
   "Import into": "Імпортувати в",
   "Download {{format}} template": "Завантажте шаблон {{format}}",
   "Choose a question file": "Виберіть файл із запитаннями",

@@ -19,6 +19,7 @@ import { bookRoute, masterySessionRoute } from "@/lib/learning-routes";
 import CategoryMenu from "./CategoryMenu";
 import { practiceMarkdown } from "@/lib/practice-content";
 import Tooltip from "@/shared/ui/Tooltip";
+import PracticeAttachments from "@/components/learning/practice/PracticeAttachments";
 
 const SOURCE_LABELS: Record<NotebookEntry["source"], string> = {
   deep_question: "Deep Question",
@@ -347,6 +348,10 @@ export default function QuestionCard({
           className="text-[14px] leading-relaxed [overflow-wrap:anywhere] [&_pre]:max-w-full [&_pre]:overflow-x-auto"
           allowHtml={false}
         />
+      </div>
+
+      <div className="sm:pl-[1.625rem]">
+        <PracticeAttachments entry={entry} />
       </div>
 
       {/* Aligned with the question text: checkbox (0.875rem) + gap (0.75rem). */}

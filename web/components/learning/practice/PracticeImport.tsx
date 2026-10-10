@@ -120,7 +120,7 @@ export function PracticeImport({
         <input
           key={target}
           type="file"
-          accept=".xlsx,.csv,.tsv,.json"
+          accept=".xlsx,.csv,.tsv,.json,.zip"
           disabled={busy}
           onChange={event => {
             void select(event.target.files?.[0]);

@@ -4712,7 +4712,7 @@
   "Page {{page}} of {{pages}}": "第 {{page}} / {{pages}} 页",
   "Import questions": "导入题目",
   "Close import": "关闭导入",
-  "Import XLSX, CSV, TSV or JSON. Up to 500 questions and 5 MB per file. XLSX uses the active sheet. Chinese and English column names are supported.": "支持 XLSX、CSV、TSV 和 JSON，每个文件最多 500 道题、5 MB。Excel 读取当前活动工作表，支持中英文列名。",
+  "Import XLSX, CSV, TSV or JSON. Up to 500 questions and 5 MB per file. XLSX uses the active sheet. Chinese and English column names are supported.": "可直接导入 XLSX、CSV、TSV 或 JSON，也可导入含一个清单文件和 assets/ 文件夹的 ZIP。最多 500 道题；清单不超过 5 MB，ZIP 不超过 64 MB。请在 asset 列填写文件名。",
   "Import into": "导入到",
   "Download {{format}} template": "下载 {{format}} 模板",
   "Choose a question file": "选择题目文件",

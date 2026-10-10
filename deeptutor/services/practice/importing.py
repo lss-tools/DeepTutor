@@ -11,6 +11,8 @@ import re
 import zipfile
 
 MAX_BYTES = 5 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
+MAX_ARCHIVE_EXPANDED = 128 * 1024 * 1024
 MAX_ROWS = 500
 MAX_CELL = 20000
 MAX_COLUMNS = 64
@@ -23,6 +25,7 @@ ALIASES = {
     "tags": ("tags", "标签", "分类"),
     "user_answer": ("user_answer", "我的答案", "作答"),
     "options": ("options", "选项"),
+    "asset": ("asset",),
 }
 TYPES = {
     "single_choice": "single_choice",
@@ -70,10 +73,14 @@ def parse_rows(data: bytes, filename: str) -> list[tuple[int, dict]]:
             content = data.decode("utf-8-sig")
         except UnicodeDecodeError:
             content = data.decode("gb18030")
-        try:
-            dialect = csv.Sniffer().sniff(content[:8192], delimiters=",;\t")
-        except csv.Error:
-            dialect = csv.excel_tab if suffix == ".tsv" else csv.excel
+        header = content.splitlines()[0] if content else ""
+        if suffix == ".csv" and header.count(",") and not any(c in header for c in ";\t"):
+            dialect = csv.excel
+        else:
+            try:
+                dialect = csv.Sniffer().sniff(content[:8192], delimiters=",;\t")
+            except csv.Error:
+                dialect = csv.excel_tab if suffix == ".tsv" else csv.excel
         rows = []
         try:
             for row in csv.reader(io.StringIO(content, newline=""), dialect):
@@ -188,6 +195,13 @@ def normalize_question(raw: dict) -> dict:
         user_answer=_cell(fields["user_answer"]),
         tags=tags,
     )
+    asset_value = fields["asset"]
+    if asset_value:
+        if isinstance(asset_value, str):
+            asset_value = json.loads(asset_value) if asset_value.lstrip().startswith("[") else asset_value.split(";")
+        if not isinstance(asset_value, list) or not all(isinstance(item, str) for item in asset_value):
+            raise ValueError("Asset must be a filename or a list of filenames")
+        result["asset"] = [item.strip() for item in asset_value if item.strip()]
     identity = {
         key: result[key] for key in ("question", "question_type", "options", "correct_answer")
     }
@@ -201,6 +215,8 @@ def normalize_question(raw: dict) -> dict:
 
 
 def preview(data: bytes, filename: str) -> dict:
+    if Path(filename).suffix.lower() == ".zip":
+        return preview_archive(data)
     questions, errors = [], []
     for number, row in parse_rows(data, filename):
         try:
@@ -210,3 +226,54 @@ def preview(data: bytes, filename: str) -> dict:
     if not questions and not errors:
         raise ValueError("The file contains no questions")
     return {"questions": questions, "errors": errors}
+
+
+def preview_archive(data: bytes) -> dict:
+    """Read one existing-format manifest and its referenced assets from a bounded ZIP."""
+    if not data or len(data) > MAX_ARCHIVE_BYTES:
+        raise ValueError("Choose a non-empty ZIP up to 64 MB")
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        entries = {}
+        total = 0
+        for item in archive.infolist():
+            name = item.filename
+            if (
+                name.startswith("/") or "\\" in name or ":" in name
+                or any(part in {"", ".", ".."} for part in name.rstrip("/").split("/"))
+                or (item.external_attr >> 16) & 0o170000 == 0o120000
+            ):
+                raise ValueError("ZIP contains an unsafe path")
+            if item.is_dir():
+                continue
+            if name in entries:
+                raise ValueError("ZIP contains duplicate filenames")
+            entries[name] = item
+            total += item.file_size
+            if len(entries) > 1000 or total > MAX_ARCHIVE_EXPANDED:
+                raise ValueError("ZIP contains too many or too large files")
+        manifests = [name for name in entries if "/" not in name and Path(name).suffix.lower() in {".xlsx", ".csv", ".tsv", ".json"}]
+        if len(manifests) != 1:
+            raise ValueError("ZIP must contain exactly one manifest at its root")
+        manifest = manifests[0]
+        if entries[manifest].file_size > MAX_BYTES:
+            raise ValueError("Manifest exceeds 5 MB")
+        result = preview(archive.read(manifest), manifest)
+        assets = {}
+        for number, question in enumerate(result["questions"], 2):
+            names = question.pop("asset", [])
+            for name in names:
+                if not name or "/" in name or "\\" in name or name in {".", ".."}:
+                    result["errors"].append({"row": number, "message": "Asset must be a plain filename"})
+                    continue
+                member = entries.get("assets/" + name)
+                if member is None:
+                    result["errors"].append({"row": number, "message": f"Missing asset: {name}"})
+                    continue
+                if member.file_size == 0 or member.file_size > 32 * 1024 * 1024:
+                    result["errors"].append({"row": number, "message": f"Asset exceeds 32 MB: {name}"})
+                    continue
+                if name not in assets:
+                    assets[name] = archive.read(member)
+            question["asset"] = names
+        result["assets"] = assets
+        return result

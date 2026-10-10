@@ -9,6 +9,7 @@
 # Use this file for Docker/CI when pyproject.toml/source code aren't yet available.
 
 -r cli.txt
+tzdata>=2025.1; sys_platform == "win32"
 
 # --- API server ---
 fastapi>=0.100.0

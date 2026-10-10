@@ -8,17 +8,17 @@ upstream, как сливаться с upstream, что ломается при 
 ## Зачем форк
 
 Платформа Этапа 2 ИИ-репетитора ОГЭ. От upstream (HKUDS/DeepTutor) нас
-отличают две цели: русский интерфейс для девятиклассника и — в перспективе —
+отличают две цели: русский интерфейс для девятиклассника и
 вложения (картинки/аудио/заготовки) в банк вопросов практики. Решение
 владельца 10.10.2026: правки держим только в своём форке, PR в upstream не
 оформляем; цена слияний принимается сознательно.
 
 ## Правила, нарушать нельзя
 
-- Свои материалы — только в **новых** файлах, которых нет у upstream
-  (`web/locales/ru/`, `tests/i18n/test_russian_locale.py`, этот файл).
-  Правка `AGENTS.md`, `README.md`, `.gitignore` upstream = конфликт при
-  каждом слиянии.
+- Свои модули и документы — в **новых** файлах, которых нет у upstream
+  (`web/locales/ru/`, `deeptutor/services/practice/assets.py`, этот файл).
+  Интеграция с API, SQLite и карточками требует точечных правок upstream-файлов.
+  Правка `AGENTS.md`, `README.md`, `.gitignore` upstream = конфликт при каждом слиянии.
 - `push` в `upstream` отключён намеренно (`DISABLED_no_push_to_upstream`).
 - Каталог `.code-index/` закрыт через `.git/info/exclude`, не через
   `.gitignore` — см. факт `fact-20261010-cidx3` в Brain.
@@ -38,6 +38,27 @@ upstream, как сливаться с upstream, что ломается при 
 
 `deeptutor/runtime/banner.py` сознательно не тронут: у баннера фолбэк на en,
 fr и pl там тоже нет.
+
+## Вложения практики (задача 1169)
+
+- `initialize_practice` добавляет `notebook_entries.attachments_json` с исходным
+  значением `[]`. Метаданные: `kind`, `name`, `path`, `sha256`, `mime`, `bytes`.
+  Файлы лежат рядом с пользовательской БД: `practice/attachments/<sha256>/<имя>`.
+- `POST /api/question-notebook/practice/questions/{id}/attachments` принимает
+  один файл до 32 МБ. `GET .../attachments/{sha256}` отдаёт файл только после
+  проверки видимости вопроса в текущей БД, записи в `attachments_json` и
+  безопасного пути. Файлы пользователя отдаются с `Cache-Control: private`,
+  `Content-Security-Policy: sandbox` и `X-Content-Type-Options: nosniff`.
+- Импорт принимает ZIP до 64 МБ с одним манифестом в корне (`.xlsx`, `.csv`,
+  `.tsv`, `.json`, до 5 МБ) и файлами в `assets/`. Колонка `asset` содержит
+  имя файла или JSON-массив имён. До 500 вопросов; каждый файл до 32 МБ,
+  суммарный распакованный объём до 128 МБ. Превью отклоняет отсутствующие
+  файлы и опасные пути. Повторный импорт того же вопроса сохраняет одну запись.
+- Вопрос показывает изображение, аудиоплеер и ссылку на скачивание файла под
+  исходным именем. Заготовки информатики общим объёмом 14,3 ГБ в ZIP не
+  загружаются; их публикация ссылками относится к задаче банка 1161.
+- Windows требует `tzdata` для тестов и работы практики с часовыми поясами;
+  зависимость добавлена в `pyproject.toml` и `requirements/server.txt`.
 
 ## Запуск форка (развёртывание 10.10.2026)
 
@@ -84,6 +105,11 @@ git merge upstream/main        # merge, не rebase
 - `deeptutor/services/settings/interface_settings.py`,
   `launch_settings.py`, `settings_spec.py` — держим строку `ru` по образцу
   соседних локалей.
+- `deeptutor/services/practice/importing.py`, `storage.py`,
+  `deeptutor/api/routers/practice.py`, `question_notebook.py`,
+  `deeptutor/services/session/sqlite_store.py` и две карточки фронта —
+  места интеграции вложений. После слияния проверить миграцию,
+  сериализацию списка и проверку владельца при раздаче.
 
 ## Что ломается при обновлении
 
@@ -122,6 +148,7 @@ node scripts/i18n_audit.mjs      # все локали strict, включая ru
 npm run test:node                # ~1300 тестов, включая language-preferences
 cd ..
 py -3.12 -m pytest tests/i18n    # пер-локальные suites, включая русский
+D:\Project\deeptutor-fork\.venv\Scripts\python.exe -m pytest tests/api/test_practice.py tests/api/test_practice_assets.py
 ```
 
 Затем руками: поднять сервер, выбрать «Русский» в настройках, пройти экраны

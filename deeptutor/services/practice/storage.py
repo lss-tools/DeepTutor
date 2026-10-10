@@ -23,6 +23,9 @@ class ReviewConflict(ValueError):
 
 
 def initialize_practice(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(notebook_entries)")}
+    if "attachments_json" not in columns:
+        conn.execute("ALTER TABLE notebook_entries ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'")
     existing = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE name='practice_review_state'"
     ).fetchone()
@@ -372,8 +375,9 @@ class PracticeStore:
                     INSERT OR IGNORE INTO notebook_entries(
                         session_id, origin_type, origin_ref, question_id, question, question_type,
                         options_json, correct_answer, explanation, difficulty, user_answer, source,
-                        result, assessment_type, created_at, updated_at, material_title, material_id)
-                    VALUES(NULL, 'external_import', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'import', ?, 'quiz', ?, ?, ?, ?)
+                        result, assessment_type, created_at, updated_at, material_title, material_id,
+                        attachments_json)
+                    VALUES(NULL, 'external_import', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'import', ?, 'quiz', ?, ?, ?, ?, ?)
                 """,
                     (
                         origin_ref,
@@ -390,6 +394,7 @@ class PracticeStore:
                         now,
                         staged["filename"],
                         "import:" + token,
+                        json.dumps(question.get("attachments", []), ensure_ascii=False),
                     ),
                 )
                 created += cursor.rowcount

@@ -11,10 +11,13 @@ import zipfile
 
 from defusedxml.ElementTree import ParseError
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from deeptutor.api.utils.http_headers import content_disposition
 from deeptutor.services.practice.answers import check_answer
-from deeptutor.services.practice.importing import MAX_BYTES, preview
+from deeptutor.services.practice.assets import MAX_ASSET_BYTES, PracticeAssetStore
+from deeptutor.services.practice.importing import MAX_ARCHIVE_BYTES, MAX_BYTES, preview
 from deeptutor.services.practice.scheduler import Rating, day_bounds
 from deeptutor.services.practice.storage import PracticeStore, ReviewConflict
 from deeptutor.services.session import get_sqlite_session_store
@@ -234,6 +237,44 @@ async def practice_question(entry_id: int):
     return {"entry": entry, "state": state}
 
 
+@router.post("/questions/{entry_id}/attachments")
+async def upload_attachment(entry_id: int, file: UploadFile = File(...)):
+    await _entry(entry_id)
+    store = PracticeAssetStore(get_sqlite_session_store().db_path)
+    try:
+        data = await file.read(MAX_ASSET_BYTES + 1)
+        attachment = await asyncio.to_thread(store.put, file.filename or "", data)
+        await asyncio.to_thread(store.add_to_question, entry_id, attachment)
+        return attachment
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    finally:
+        await file.close()
+
+
+@router.get("/questions/{entry_id}/attachments/{digest}")
+async def download_attachment(entry_id: int, digest: str):
+    await _entry(entry_id)
+    store = PracticeAssetStore(get_sqlite_session_store().db_path)
+    found = await asyncio.to_thread(store.for_question, entry_id, digest)
+    if found is None:
+        raise HTTPException(404, "Attachment not found")
+    attachment, path = found
+    disposition = "inline" if attachment["kind"] in {"image", "audio"} else "attachment"
+    return FileResponse(
+        path,
+        media_type=attachment["mime"],
+        headers={
+            "Content-Disposition": content_disposition(attachment["name"], disposition=disposition),
+            "Cache-Control": "private, max-age=0, must-revalidate",
+            "Content-Security-Policy": "sandbox",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.post("/questions/{entry_id}/check")
 async def check(entry_id: int, payload: AnswerRequest):
     entry = await _entry(entry_id)
@@ -274,8 +315,9 @@ async def import_template(format: Literal["csv", "xlsx"] = "csv"):
             "explanation",
             "tags",
             "user_answer",
+            "asset",
         ],
-        ["2 + 2 = ?", "single_choice", "3", "4", "5", "6", "B", "2 + 2 = 4", "Math,Addition", ""],
+        ["2 + 2 = ?", "single_choice", "3", "4", "5", "6", "B", "2 + 2 = 4", "Math,Addition", "", ""],
         [
             "Select the prime numbers",
             "multi_choice",
@@ -287,8 +329,9 @@ async def import_template(format: Literal["csv", "xlsx"] = "csv"):
             "2 and 3 are prime",
             "Math",
             "",
+            "",
         ],
-        ["The Earth orbits the Sun", "true_false", "", "", "", "", "true", "", "Science", ""],
+        ["The Earth orbits the Sun", "true_false", "", "", "", "", "true", "", "Science", "", ""],
         [
             "Explain photosynthesis",
             "short_answer",
@@ -299,6 +342,7 @@ async def import_template(format: Literal["csv", "xlsx"] = "csv"):
             "Plants convert light into chemical energy.",
             "",
             "Biology",
+            "",
             "",
         ],
     ]
@@ -332,14 +376,29 @@ async def import_preview(
 ):
     await _course_session_ids(get_sqlite_session_store(), course_id)
     try:
-        data = await file.read(MAX_BYTES + 1)
+        limit = MAX_ARCHIVE_BYTES if (file.filename or "").lower().endswith(".zip") else MAX_BYTES
+        data = await file.read(limit + 1)
         parsed = await asyncio.to_thread(preview, data, file.filename or "")
     except (ValueError, UnicodeError, OSError, zipfile.BadZipFile, KeyError, ParseError) as exc:
         raise HTTPException(422, str(exc)) from exc
     finally:
         await file.close()
     token = None
+    assets = parsed.pop("assets", {})
+    if not assets and any(question.get("asset") for question in parsed["questions"]):
+        parsed["errors"].append({"row": 0, "message": "Use a ZIP archive for asset columns"})
     if not parsed["errors"]:
+        if assets:
+            asset_store = PracticeAssetStore(get_sqlite_session_store().db_path)
+            try:
+                saved = {
+                    name: await asyncio.to_thread(asset_store.put, name, content)
+                    for name, content in assets.items()
+                }
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            for question in parsed["questions"]:
+                question["attachments"] = [saved[name] for name in question.pop("asset", [])]
         token = await asyncio.to_thread(
             PracticeStore(get_sqlite_session_store().db_path).stage_import,
             file.filename or "",

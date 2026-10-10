@@ -1,6 +1,7 @@
 'use client'
 
 import Markdown from '@/components/common/MarkdownRenderer'
+import PracticeAttachments from '@/components/learning/practice/PracticeAttachments'
 import { practiceMarkdown } from '@/lib/practice-content'
 import { randomUuid } from '@/lib/random-uuid'
 import { WorkspaceLabel } from '../LibraryWorkspace'
@@ -269,6 +270,7 @@ function PracticeTurn({
               className="[overflow-wrap:anywhere] [&_pre]:max-w-full [&_pre]:overflow-x-auto"
             />
           </div>
+          <PracticeAttachments entry={entry} workspaceId={workspaceId} />
           {multi && (
             <p className="mt-3 text-xs text-muted-foreground">{t('Select all correct answers')}</p>
           )}

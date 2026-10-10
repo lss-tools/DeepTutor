@@ -3856,6 +3856,9 @@ class SQLiteSessionStore:
             "difficulty": row["difficulty"] or "",
             "user_answer": row["user_answer"] or "",
             "user_answer_images": images,
+            "attachments": _json_loads(row["attachments_json"], [])
+            if "attachments_json" in keys
+            else [],
             "is_correct": is_correct,
             "source": (row["source"] or "deep_question") if "source" in keys else "deep_question",
             "material_id": (row["material_id"] or "") if "material_id" in keys else "",
@@ -4032,7 +4035,7 @@ class SQLiteSessionStore:
                 n.origin_type, n.origin_ref, n.turn_id, n.question_id,
                 n.question, n.question_type, n.options_json,
                 n.correct_answer, n.explanation, n.difficulty,
-                n.user_answer, n.user_answer_images_json, n.source, n.material_id,
+                n.user_answer, n.user_answer_images_json, n.attachments_json, n.source, n.material_id,
                 n.material_title, n.section_id, n.section_title, n.score_trend,
                 n.assessment_type, n.result, n.mastery_path_id, n.knowledge_point_id,
                 n.attempt_count, n.hints_used, n.confidence, n.response_time, n.quality,

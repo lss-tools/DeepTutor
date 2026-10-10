@@ -61,6 +61,7 @@ class NotebookEntryItem(BaseModel):
     difficulty: str = ""
     user_answer: str = ""
     user_answer_images: list[AnswerImageItem] = []
+    attachments: list[dict] = []
     source: AssessmentSource = "deep_question"
     material_id: str = ""
     material_title: str = ""
