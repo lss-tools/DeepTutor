@@ -97,6 +97,8 @@ const REQUIRED_LOCALES = ["en", "zh", "fr", "de", "uk"];
 const MIN_USED_COVERAGE = new Map([
   ["fr", 0.65],
   ["uk", 0.75],
+  // Russian is being translated in portions; the floor rises as it fills in.
+  ["ru", 0.0],
 ]);
 
 function hasTranslation(entries, pluralForms, key) {
