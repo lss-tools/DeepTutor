@@ -33,9 +33,38 @@ upstream, как сливаться с upstream, что ломается при 
 |---|---|
 | `7fc7d069` | регистрация локали ru: `web/i18n/languages.ts` (+ `normalizeLanguage`), `web/i18n/init.ts` (ленивый импорт бандла), `deeptutor/services/settings/interface_settings.py` (`UiLanguage`, нормализатор), `deeptutor/services/config/launch_settings.py`, `deeptutor/services/config/settings_spec.py` (`_LANGUAGE_CHOICES`), ключ `language.russian` в `web/locales/en/app.json`, пол ru в `web/scripts/i18n_audit.mjs`, тест `web/tests/language-preferences.test.ts` |
 | `d86d2538`…`4067fc4a` | полный русский каталог `web/locales/ru/app.json` (5538 ключей: 5508 из en + русские формы `_few`/`_many`) и `tests/i18n/test_russian_locale.py` |
+| `0d363356` | `language.russian` в каталогах zh, fr, de, uk, pl — без него падали пер-локальные тесты покрытия en |
+| `888171de` | второй канал локализации `{zh, en}`: тип `Lang` получил обязательное `ru`, все выборщики знают ru; переведены ученические экраны (хаб и навигация настроек, учебное пространство, подсказки следующего шага, подключение агентов, секции инструментов, метки сервисов соединений) |
 
 `deeptutor/runtime/banner.py` сознательно не тронут: у баннера фолбэк на en,
 fr и pl там тоже нет.
+
+## Запуск форка (развёртывание 10.10.2026)
+
+Форк живёт в `D:\Project\deeptutor-fork` и занимает обычные адреса
+`127.0.0.1:8001` (бэкенд) и `localhost:3782` (фронт). Рабочая PyPI-установка
+в `D:\Project\deeptutor` при этом не работает — её серверы остановлены, каталог
+остался эталоном «из коробки».
+
+```
+# один раз: venv и editable-установка
+py -3.12 -m venv D:\Project\deeptutor-fork\.venv
+D:\Project\deeptutor-fork\.venv\Scripts\python.exe -m pip install -e D:\Project\deeptutor-fork
+
+# запуск и остановка (первый старт сам собирает фронт, минуты)
+D:\Project\deeptutor-fork\.venv\Scripts\deeptutor.exe start --home D:\Project\deeptutor-fork --detach --no-browser
+D:\Project\deeptutor-fork\.venv\Scripts\deeptutor.exe stop --home D:\Project\deeptutor-fork
+```
+
+- После правок `web/` лаунчер сам пересобирает фронт при следующем старте
+  (отпечаток исходников, каталог `web/.next-deeptutor`).
+- Конфиги в `data\user\settings\` скопированы из рабочей установки
+  10.10.2026, `interface.json` переписан без BOM (LF, UTF-8) и с `language: ru`.
+  Файлы данных форка — UTF-8 **без** BOM: читатель настроек при сбое чтения
+  молча подставляет дефолты (BOM в `interface.json` выглядит как «язык не
+  применяется»).
+- В `model_catalog.json` лежит литеральный ключ OpenRouter — файл локальный,
+  наружу не отдавать.
 
 ## Порядок слияния с upstream
 
@@ -67,8 +96,22 @@ git merge upstream/main        # merge, не rebase
    `_few`/`_many`, которых нет в en — это норма (так же устроен pl).
    Не «чистить» их как мусор: без них i18next не разрешит множественное
    число по-русски.
-3. **Тест `test_russian_locale.py`** требует `set(en) ⊆ set(ru)` — тот же
-   сигнал, что и аудит.
+3. **Тест `test_russian_locale.py`** требует `set(en) ⊆ set(ru)` и
+   `language.russian` в каждом каталоге — тот же сигнал, что и аудит.
+4. **Второй канал `{zh, en}`.** Кроме react-i18next в коде есть ad-hoc
+   записи `Lang` (тип в `web/features/settings/navigation/settings-nav.ts`,
+   локальные копии в `SpaceDashboard.tsx`, `ConnectedAgents.tsx`,
+   `next-step-copy.ts`, `ConnectionsEditor.tsx`,
+   `ToolsSettingsSection.tsx`, `SubagentSettingsEditor.tsx`) с бинарным
+   выборщиком «zh ? zh : en». Теперь почти везде `Lang = { zh, en, ru }`
+   с обязательным ru — новый upstream-элемент без ru не соберёт
+   `npm run typecheck`, дописывайте перевод. Исключение —
+   `SubagentSettingsEditor.tsx`: свой локальный тип, 93 строки, редактор
+   субагентов (админский); ru там пока нет, остаётся английский.
+5. **Драфт настроек.** Выбор языка в настройках ставит черновик; изменение
+   применяется кнопкой «Применить изменения» (upstream-механика draft/apply,
+   не дефект). Бэкенд форка нормализует `ru` и не даёт ему слетать в `en`,
+   как в upstream.
 
 ## Проверка форка после слияния
 
