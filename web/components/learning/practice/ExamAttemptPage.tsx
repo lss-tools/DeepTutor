@@ -8,11 +8,15 @@ import {
   completeExamAttempt,
   createExamAttempt,
   getExamAttempt,
+  getPracticeScoreHistory,
   getExamReadiness,
+  recordExamModelScore,
+  type ExamItem,
   type ExamAttempt,
   type ExamReadiness,
 } from '@/lib/practice-api'
 import { useEffect, useMemo, useState } from 'react'
+import { useQuizFollowupController, useFollowupThread } from '@/context/QuizFollowupContext'
 
 const SUBJECTS = [
   ['math', 'Математика'],
@@ -135,7 +139,8 @@ export function ExamAttemptPage() {
             {readiness.ready ? 'Вариант готов' : `Не хватает позиций: ${readiness.missing_positions.length}`}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Для сборки нужны задания с подтверждённым эталоном и автоматической проверкой.
+            Для сборки нужны задания с подтверждённым эталоном и автоматической
+            проверкой либо критериями для оценки решения.
           </p>
           {!readiness.ready && (
             <p className="mt-3 text-sm">Позиции: {readiness.missing_positions.join(', ')}</p>
@@ -151,7 +156,7 @@ export function ExamAttemptPage() {
         </section>
       )}
 
-      {attempt && attempt.status === 'in_progress' && activeItem && (
+      {attempt && attempt.status === 'in_progress' && attempt.items.some(item => !item.answered) && activeItem && (
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
           <div className="mb-5 flex items-center justify-between text-sm text-muted-foreground">
             <span>Позиция {activeItem.position} из {attempt.items.length}</span>
@@ -207,15 +212,37 @@ export function ExamAttemptPage() {
             <button type="button" onClick={() => void saveAnswer()} disabled={busy} className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground disabled:opacity-50">
               Сохранить ответ
             </button>
-            {attempt.items.every(item => item.answered) && (
-              <button type="button" onClick={() => void finish()} disabled={busy || activeItem.answer !== answer} className="rounded-xl border border-border px-4 py-2.5 text-sm disabled:opacity-50">
-                Завершить вариант
-              </button>
-            )}
             <button type="button" onClick={close} disabled={busy} className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground">
               Выйти и продолжить позже
             </button>
           </div>
+        </section>
+      )}
+
+      {attempt && attempt.status === 'in_progress' && attempt.items.every(item => item.answered) && (
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
+          <h2 className="text-lg font-semibold">Проверка ответов</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Автоматические ответы уже оценены. Развёрнутые решения проверьте с тьютором по критериям.
+          </p>
+          <div className="mt-5 space-y-4">
+            {attempt.items.filter(item => item.earned_score === null).map(item => (
+              <ModelGradePanel
+                key={item.position}
+                attemptId={attempt.attempt_id}
+                item={item}
+                onScored={setAttempt}
+              />
+            ))}
+          </div>
+          {attempt.items.every(item => item.earned_score !== null) && (
+            <button type="button" onClick={() => void finish()} disabled={busy} className="mt-6 rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground disabled:opacity-50">
+              Завершить вариант
+            </button>
+          )}
+          <button type="button" onClick={close} disabled={busy} className="mt-4 block rounded-xl px-1 py-2 text-sm text-muted-foreground">
+            Выйти и продолжить позже
+          </button>
         </section>
       )}
 
@@ -245,5 +272,102 @@ export function ExamAttemptPage() {
 
       <Link className="mt-6 inline-block text-sm underline" href="/learning/practice">К практике</Link>
     </LearningShell>
+  )
+}
+
+function ModelGradePanel({
+  attemptId,
+  item,
+  onScored,
+}: {
+  attemptId: string
+  item: ExamItem
+  onScored: (attempt: ExamAttempt) => void
+}) {
+  const key = `oge-exam:${attemptId}:${item.position}`
+  const controller = useQuizFollowupController()
+  const thread = useFollowupThread(key)
+  const [grading, setGrading] = useState(false)
+  const [baseline, setBaseline] = useState<string[] | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!grading || thread.isStreaming || thread.messages.at(-1)?.role !== 'assistant' || !baseline) return
+    let active = true
+    void getPracticeScoreHistory(item.entry_id)
+      .then(async history => {
+        if (!active) return
+        const newGrade = history.items.find(score =>
+          score.grading_source === 'model'
+          && score.chat_session_id === thread.sessionId
+          && !baseline.includes(score.attempt_id)
+        )
+        if (!newGrade) {
+          setError('Тьютор не сохранил балл. Повторите проверку или отправьте решение на ручную оценку.')
+          setGrading(false)
+          return
+        }
+        const attempt = await recordExamModelScore(attemptId, item.position, newGrade.attempt_id)
+        if (active) {
+          onScored(attempt)
+          setGrading(false)
+        }
+      })
+      .catch(reason => {
+        if (active) {
+          setError(reason instanceof Error ? reason.message : String(reason))
+          setGrading(false)
+        }
+      })
+    return () => { active = false }
+  }, [attemptId, baseline, grading, item.entry_id, item.position, onScored, thread.isStreaming, thread.messages, thread.sessionId])
+
+  async function grade() {
+    if (grading || thread.isStreaming) return
+    setError('')
+    try {
+      const history = await getPracticeScoreHistory(item.entry_id)
+      setBaseline(history.items.map(score => score.attempt_id))
+      setGrading(true)
+      controller.sendMessage({
+        questionKey: key,
+        content: `Оцени моё решение по подтверждённым критериям ОГЭ. Мой ответ:\n\n${item.answer ?? ''}`,
+        attachments: [],
+        language: 'ru',
+        questionNotebookReferences: [item.entry_id],
+      })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  return (
+    <article className="rounded-xl border border-border p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold">Позиция {item.position} · {item.max_score} балла</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm">{item.answer}</p>
+        </div>
+        {item.earned_score !== null ? (
+          <span className="shrink-0 text-sm font-semibold">{item.earned_score} / {item.max_score}</span>
+        ) : (
+          <button type="button" onClick={() => void grade()} disabled={grading || thread.isStreaming} className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-50">
+            {grading || thread.isStreaming ? 'Проверяю…' : 'Оценить решение'}
+          </button>
+        )}
+      </div>
+      {thread.messages.filter(message => message.role === 'assistant').map((message, index) => (
+        <p key={`${key}:${index}`} className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{message.content}</p>
+      ))}
+      {(error || thread.error) && <p role="alert" className="mt-3 text-sm text-destructive">{error || thread.error}</p>}
+      {item.question.criteria?.length ? (
+        <details className="mt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer">Критерии оценки</summary>
+          <ul className="mt-2 list-disc pl-5">
+            {item.question.criteria.map(criterion => <li key={`${criterion.score}:${criterion.text}`}>{criterion.score}: {criterion.text}</li>)}
+          </ul>
+        </details>
+      ) : null}
+    </article>
   )
 }

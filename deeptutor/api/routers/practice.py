@@ -95,6 +95,10 @@ class ExamAnswerRequest(BaseModel):
     answer: str = Field(default="", max_length=20000)
 
 
+class ExamModelScoreRequest(BaseModel):
+    grading_attempt_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
+
+
 class CommitRequest(BaseModel):
     token: str = Field(min_length=32, max_length=32, pattern=r"^[a-f0-9]+$")
 
@@ -400,6 +404,27 @@ async def answer_exam_position(attempt_id: str, position: str, payload: ExamAnsw
         )
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/exam/attempts/{attempt_id}/positions/{position}/model-score")
+async def record_exam_model_score(
+    attempt_id: str,
+    position: str,
+    payload: ExamModelScoreRequest,
+):
+    try:
+        return await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).record_exam_model_score,
+            attempt_id,
+            position,
+            payload.grading_attempt_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ReviewConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

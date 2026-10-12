@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import json
 import math
 from pathlib import Path
+import random
 import sqlite3
 import time
 import uuid
@@ -115,6 +116,7 @@ def initialize_practice(conn: sqlite3.Connection) -> None:
             answer TEXT,
             earned_score REAL,
             answered_at REAL,
+            grading_attempt_id TEXT,
             PRIMARY KEY(attempt_id, position),
             UNIQUE(attempt_id, entry_id)
         );
@@ -156,6 +158,11 @@ def initialize_practice(conn: sqlite3.Connection) -> None:
             WHERE entry_id = NEW.id AND (OLD.is_correct = 1 OR OLD.result = 'ungraded');
         END;
     """)
+    exam_item_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(practice_exam_items)")
+    }
+    if "grading_attempt_id" not in exam_item_columns:
+        conn.execute("ALTER TABLE practice_exam_items ADD COLUMN grading_attempt_id TEXT")
     if not existing:
         # Additive migration: original IDs, answers, timestamps and categories stay intact.
         conn.execute("""
@@ -544,17 +551,29 @@ class PracticeStore:
         positions = self._exam_positions(subject)
         with self.connect() as conn:
             rows = conn.execute(
-                """SELECT kim_position, COUNT(*) AS candidates FROM notebook_entries
+                """SELECT * FROM notebook_entries
                 WHERE exam_subject=? AND kim_year=? AND reference_status IN ('verified','confirmed')
-                  AND checking_mode='auto' AND TRIM(COALESCE(correct_answer,''))!=''
+                  AND (checking_mode='auto' OR (checking_mode='model' AND EXISTS(
+                      SELECT 1 FROM practice_question_criteria c
+                      WHERE c.entry_id=notebook_entries.id)))
+                  AND TRIM(COALESCE(correct_answer,''))!=''
                   AND max_score>0 AND TRIM(question)!='' AND TRIM(COALESCE(explanation,''))!=''
                   AND (session_id IS NULL OR EXISTS(
                       SELECT 1 FROM sessions s WHERE s.id=notebook_entries.session_id
                         AND s.deleted_at IS NULL))
-                GROUP BY kim_position""",
+                """ ,
                 (subject, str(kim_year)),
             ).fetchall()
-        counts = {str(row["kim_position"]): int(row["candidates"]) for row in rows}
+        from .answers import check_answer
+
+        counts = {position: 0 for position in positions}
+        for row in rows:
+            mode = row["checking_mode"]
+            if mode == "auto" and check_answer(dict(row), str(row["correct_answer"])) is not True:
+                continue
+            position = str(row["kim_position"])
+            if position in counts:
+                counts[position] += 1
         missing = [position for position in positions if counts.get(position, 0) == 0]
         return {
             "exam_subject": subject,
@@ -564,7 +583,7 @@ class PracticeStore:
             "missing_positions": missing,
             "ready": not missing,
             "candidate_counts": {position: counts.get(position, 0) for position in positions},
-            "source_policy": "verified reference and automatic grading only",
+            "source_policy": "verified reference with automatic or criteria-based model grading",
         }
 
     @staticmethod
@@ -588,7 +607,10 @@ class PracticeStore:
                 "question": snapshot["question"],
                 "question_type": snapshot["question_type"],
                 "options": options,
+                "checking_mode": snapshot.get("checking_mode", ""),
             }
+            if snapshot.get("checking_mode") == "model":
+                question["criteria"] = snapshot.get("criteria", [])
             if completed:
                 question["correct_answer"] = snapshot["correct_answer"]
                 question["explanation"] = snapshot["explanation"]
@@ -618,21 +640,31 @@ class PracticeStore:
             conn.execute("BEGIN IMMEDIATE")
             selected = []
             for position in positions:
-                row = conn.execute(
+                candidates = conn.execute(
                     """SELECT n.* FROM notebook_entries n
                     WHERE n.exam_subject=? AND n.kim_year=? AND n.kim_position=?
-                      AND n.reference_status IN ('verified','confirmed') AND n.checking_mode='auto'
+                      AND n.reference_status IN ('verified','confirmed')
+                      AND n.checking_mode IN ('auto','model')
                       AND TRIM(COALESCE(n.correct_answer,''))!='' AND n.max_score>0
                       AND TRIM(n.question)!='' AND TRIM(COALESCE(n.explanation,''))!=''
                       AND (n.session_id IS NULL OR EXISTS(
                           SELECT 1 FROM sessions s WHERE s.id=n.session_id
                             AND s.deleted_at IS NULL))
-                    ORDER BY RANDOM() LIMIT 1""",
+                      AND (n.checking_mode='auto' OR EXISTS(
+                          SELECT 1 FROM practice_question_criteria c WHERE c.entry_id=n.id))
+                    ORDER BY n.id""",
                     (subject, str(kim_year), position),
-                ).fetchone()
-                if row is None:
+                ).fetchall()
+                from .answers import check_answer
+
+                candidates = [
+                    row for row in candidates
+                    if row["checking_mode"] == "model"
+                    or check_answer(dict(row), str(row["correct_answer"])) is True
+                ]
+                if not candidates:
                     raise IncompleteExamVariant([position])
-                selected.append(row)
+                selected.append(random.choice(candidates))
             maximum = sum(float(row["max_score"]) for row in selected)
             conn.execute(
                 """INSERT INTO practice_exam_attempts(
@@ -640,14 +672,29 @@ class PracticeStore:
                     created_at, updated_at) VALUES(?, ?, ?, 'in_progress', ?, 'unpublished', ?, ?)""",
                 (attempt_id, subject, kim_year, maximum, now, now),
             )
+            item_values = []
+            for row in selected:
+                snapshot = dict(row)
+                snapshot["criteria"] = [
+                    dict(criteria)
+                    for criteria in conn.execute(
+                        """SELECT score, text, source, scope FROM practice_question_criteria
+                        WHERE entry_id=? ORDER BY score""",
+                        (row["id"],),
+                    ).fetchall()
+                ]
+                item_values.append((
+                    attempt_id,
+                    row["kim_position"],
+                    row["id"],
+                    json.dumps(snapshot, ensure_ascii=False),
+                    float(row["max_score"]),
+                ))
             conn.executemany(
                 """INSERT INTO practice_exam_items(
                     attempt_id, position, entry_id, question_snapshot, max_score)
                     VALUES(?, ?, ?, ?, ?)""",
-                [
-                    (attempt_id, row["kim_position"], row["id"], json.dumps(dict(row), ensure_ascii=False), float(row["max_score"]))
-                    for row in selected
-                ],
+                item_values,
             )
             return self._exam_attempt_payload(conn, attempt_id)
 
@@ -677,18 +724,73 @@ class PracticeStore:
             snapshot = json.loads(row["question_snapshot"])
             from .answers import check_answer
 
-            correct = check_answer(snapshot, answer)
-            if correct is None:
-                raise ValueError("This question cannot be checked automatically")
-            earned = float(row["max_score"]) if correct else 0.0
+            if snapshot.get("checking_mode") == "model":
+                if not answer.strip():
+                    raise ValueError("Enter the solution before saving this position")
+                earned = None
+            else:
+                correct = check_answer(snapshot, answer)
+                if correct is None:
+                    raise ValueError("This question cannot be checked automatically")
+                earned = float(row["max_score"]) if correct else 0.0
             conn.execute(
-                """UPDATE practice_exam_items SET answer=?, earned_score=?, answered_at=?
+                """UPDATE practice_exam_items SET answer=?, earned_score=?, answered_at=?,
+                    grading_attempt_id=NULL
                 WHERE attempt_id=? AND position=?""",
                 (answer, earned, now, attempt_id, str(position)),
             )
             conn.execute(
                 "UPDATE practice_exam_attempts SET updated_at=? WHERE attempt_id=?",
                 (now, attempt_id),
+            )
+            return self._exam_attempt_payload(conn, attempt_id)
+
+    def record_exam_model_score(
+        self,
+        attempt_id: str,
+        position: str,
+        grading_attempt_id: str,
+    ) -> dict:
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            attempt = conn.execute(
+                "SELECT status FROM practice_exam_attempts WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchone()
+            if attempt is None:
+                raise LookupError("Exam attempt not found")
+            if attempt["status"] != "in_progress":
+                raise ValueError("The exam attempt is already completed")
+            item = conn.execute(
+                "SELECT * FROM practice_exam_items WHERE attempt_id=? AND position=?",
+                (attempt_id, str(position)),
+            ).fetchone()
+            if item is None or item["answered_at"] is None:
+                raise LookupError("Answered exam position not found")
+            snapshot = json.loads(item["question_snapshot"])
+            if snapshot.get("checking_mode") != "model":
+                raise ValueError("This exam position does not use model grading")
+            score = conn.execute(
+                """SELECT * FROM practice_score_events
+                WHERE attempt_id=? AND entry_id=? AND grading_source='model'""",
+                (grading_attempt_id, item["entry_id"]),
+            ).fetchone()
+            if score is None:
+                raise LookupError("Model grade not found for this question")
+            if float(score["max_score"]) != float(item["max_score"]):
+                raise ValueError("Model grade maximum does not match this exam position")
+            if item["grading_attempt_id"]:
+                if item["grading_attempt_id"] != grading_attempt_id:
+                    raise ReviewConflict("This exam position already has another model grade")
+                return self._exam_attempt_payload(conn, attempt_id)
+            conn.execute(
+                """UPDATE practice_exam_items SET earned_score=?, grading_attempt_id=?
+                WHERE attempt_id=? AND position=?""",
+                (float(score["final_score"]), grading_attempt_id, attempt_id, str(position)),
+            )
+            conn.execute(
+                "UPDATE practice_exam_attempts SET updated_at=? WHERE attempt_id=?",
+                (time.time(), attempt_id),
             )
             return self._exam_attempt_payload(conn, attempt_id)
 
@@ -709,6 +811,8 @@ class PracticeStore:
             ).fetchall()
             if any(item["answered_at"] is None for item in items):
                 raise ValueError("Answer every position before completing the exam")
+            if any(item["earned_score"] is None for item in items):
+                raise ValueError("Grade every model-checked position before completing the exam")
             total = sum(float(item["earned_score"]) for item in items)
             wrong_items = conn.execute(
                 """SELECT i.entry_id FROM practice_exam_items i

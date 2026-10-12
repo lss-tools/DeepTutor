@@ -56,6 +56,8 @@ export interface ExamItem {
     question: string
     question_type: string
     options: Record<string, string>
+    checking_mode?: string
+    criteria?: { score: number; text: string; source: string; scope: string }[]
     correct_answer?: string
     explanation?: string
   }
@@ -153,6 +155,13 @@ export const completeExamAttempt = (attemptId: string) =>
     `/exam/attempts/${encodeURIComponent(attemptId)}/complete`,
     { method: 'POST' }
   )
+export const recordExamModelScore = (attemptId: string, position: string, gradingAttemptId: string) =>
+  request<ExamAttempt>(
+    `/exam/attempts/${encodeURIComponent(attemptId)}/positions/${encodeURIComponent(position)}/model-score`,
+    json({ grading_attempt_id: gradingAttemptId })
+  )
+export const getPracticeScoreHistory = (entryId: number) =>
+  request<{ items: NonNullable<NotebookEntry['practice_scores']> }>(`/questions/${entryId}/scores`)
 export const getPracticeQuestion = (id: number, workspaceId?: string) =>
   request<PracticeQuestion>(`/questions/${id}`, undefined, workspaceId)
 export const checkPracticeAnswer = (id: number, answer: string, workspaceId?: string) =>
