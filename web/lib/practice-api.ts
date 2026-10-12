@@ -111,7 +111,13 @@ export const savePracticeReview = (
   },
   workspaceId?: string
 ) =>
-  request<{ due_at: number; correct: boolean | null; rating: PracticeRating; is_mistake: boolean }>(
+  request<{
+    due_at: number
+    correct: boolean | null
+    rating: PracticeRating
+    is_mistake: boolean
+    score?: { earned_score: number; max_score: number; grading_source: string } | null
+  }>(
     `/questions/${id}/review`,
     json(body),
     workspaceId

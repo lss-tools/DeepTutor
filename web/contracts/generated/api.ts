@@ -6460,6 +6460,40 @@ export interface paths {
     readonly patch?: never;
     readonly trace?: never;
   };
+  readonly "/api/question-notebook/practice/questions/{entry_id}/attachments": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    /** Upload Attachment */
+    readonly post: operations["upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post"];
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly "/api/question-notebook/practice/questions/{entry_id}/attachments/{digest}": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    /** Download Attachment */
+    readonly get: operations["download_attachment_api_question_notebook_practice_questions__entry_id__attachments__digest__get"];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
   readonly "/api/question-notebook/practice/questions/{entry_id}/check": {
     readonly parameters: {
       readonly query?: never;
@@ -6492,6 +6526,40 @@ export interface paths {
     readonly options?: never;
     readonly head?: never;
     readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly "/api/question-notebook/practice/questions/{entry_id}/scores": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    /** Score History */
+    readonly get: operations["score_history_api_question_notebook_practice_questions__entry_id__scores_get"];
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    readonly patch?: never;
+    readonly trace?: never;
+  };
+  readonly "/api/question-notebook/practice/questions/{entry_id}/scores/{attempt_id}": {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: never;
+      readonly path?: never;
+      readonly cookie?: never;
+    };
+    readonly get?: never;
+    readonly put?: never;
+    readonly post?: never;
+    readonly delete?: never;
+    readonly options?: never;
+    readonly head?: never;
+    /** Correct Score */
+    readonly patch: operations["correct_score_api_question_notebook_practice_questions__entry_id__scores__attempt_id__patch"];
     readonly trace?: never;
   };
   readonly "/api/question-notebook/practice/queue": {
@@ -11427,10 +11495,7 @@ export interface components {
     };
     /** Body_admin_import_users_api_auth_users_import_post */
     readonly Body_admin_import_users_api_auth_users_import_post: {
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
     };
     /** Body_create_knowledge_base_api_knowledge_bases_post */
@@ -11474,10 +11539,7 @@ export interface components {
     };
     /** Body_import_docx_api_documents_import_docx_post */
     readonly Body_import_docx_api_documents_import_docx_post: {
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
     };
     /** Body_import_preview_api_question_notebook_practice_import_preview_post */
@@ -11487,10 +11549,7 @@ export interface components {
        * @default
        */
       readonly course_id: string;
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
       /**
        * Target
@@ -11501,17 +11560,13 @@ export interface components {
     };
     /** Body_import_visualizer_api_visualizers_import_post */
     readonly Body_import_visualizer_api_visualizers_import_post: {
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
     };
     /** Body_library_add */
     readonly Body_library_add: {
       /**
        * File
-       * Format: binary
        * @description Raw file bytes
        */
       readonly file: string;
@@ -11528,10 +11583,7 @@ export interface components {
     };
     /** Body_preview_office_upload_api_file_preview_pdf_post */
     readonly Body_preview_office_upload_api_file_preview_pdf_post: {
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
     };
     /** Body_reindex_knowledge_base_api_knowledge_bases__kb_name__reindex_post */
@@ -11554,20 +11606,19 @@ export interface components {
     };
     /** Body_speech_to_text_api_voice_stt_post */
     readonly Body_speech_to_text_api_voice_stt_post: {
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
       /** Language */
       readonly language?: string | null;
     };
+    /** Body_upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post */
+    readonly Body_upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post: {
+      /** File */
+      readonly file: string;
+    };
     /** Body_upload_avatar_api_auth_profile_avatar_put */
     readonly Body_upload_avatar_api_auth_profile_avatar_put: {
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
     };
     /** Body_upload_files_api_knowledge_bases__kb_name__upload_post */
@@ -11588,10 +11639,7 @@ export interface components {
     };
     /** Body_upload_material_api_reading_materials_post */
     readonly Body_upload_material_api_reading_materials_post: {
-      /**
-       * File
-       * Format: binary
-       */
+      /** File */
       readonly file: string;
     };
     /** BookmarkInfo */
@@ -13220,7 +13268,7 @@ export interface components {
        * Language
        * @enum {string}
        */
-      readonly language: "en" | "zh" | "fr" | "de" | "uk" | "pl";
+      readonly language: "en" | "zh" | "fr" | "de" | "uk" | "pl" | "ru";
     };
     /** LearnerOverrideRequest */
     readonly LearnerOverrideRequest: {
@@ -14207,10 +14255,22 @@ export interface components {
        */
       readonly ai_judgment: string;
       /**
+       * Answer Format
+       * @default
+       */
+      readonly answer_format: string;
+      /**
        * Assessment Type
        * @default
        */
       readonly assessment_type: string;
+      /**
+       * Attachments
+       * @default []
+       */
+      readonly attachments: readonly {
+        readonly [key: string]: unknown;
+      }[];
       /**
        * Attempt Count
        * @default 1
@@ -14224,6 +14284,11 @@ export interface components {
       /** Categories */
       readonly categories?:
         readonly components["schemas"]["CategoryItem"][] | null;
+      /**
+       * Checking Mode
+       * @default
+       */
+      readonly checking_mode: string;
       /** Confidence */
       readonly confidence?: number | null;
       /**
@@ -14233,11 +14298,20 @@ export interface components {
       readonly correct_answer: string;
       /** Created At */
       readonly created_at: number;
+      /** Criteria */
+      readonly criteria?: readonly {
+        readonly [key: string]: unknown;
+      }[];
       /**
        * Difficulty
        * @default
        */
       readonly difficulty: string;
+      /**
+       * Exam Subject
+       * @default
+       */
+      readonly exam_subject: string;
       /**
        * Explanation
        * @default
@@ -14256,10 +14330,30 @@ export interface components {
       /** Id */
       readonly id: number;
       /**
+       * Is Analogue
+       * @default false
+       */
+      readonly is_analogue: boolean;
+      /**
        * Is Correct
        * @default false
        */
       readonly is_correct: boolean;
+      /**
+       * Kim Part
+       * @default
+       */
+      readonly kim_part: string;
+      /**
+       * Kim Position
+       * @default
+       */
+      readonly kim_position: string;
+      /**
+       * Kim Year
+       * @default
+       */
+      readonly kim_year: string;
       /**
        * Knowledge Point Id
        * @default
@@ -14280,6 +14374,8 @@ export interface components {
        * @default
        */
       readonly material_title: string;
+      /** Max Score */
+      readonly max_score?: number | null;
       /**
        * Options
        * @default {}
@@ -14303,6 +14399,10 @@ export interface components {
       readonly practice?: {
         readonly [key: string]: unknown;
       } | null;
+      /** Practice Scores */
+      readonly practice_scores?: readonly {
+        readonly [key: string]: unknown;
+      }[];
       /** Quality */
       readonly quality?: number | null;
       /** Question */
@@ -14313,10 +14413,20 @@ export interface components {
        */
       readonly question_id: string;
       /**
+       * Question Source
+       * @default
+       */
+      readonly question_source: string;
+      /**
        * Question Type
        * @default
        */
       readonly question_type: string;
+      /**
+       * Reference Status
+       * @default
+       */
+      readonly reference_status: string;
       /**
        * Resolved
        * @default false
@@ -15325,6 +15435,11 @@ export interface components {
       readonly worker_count: number;
       /** Worker Id */
       readonly worker_id: string;
+    };
+    /** ScoreCorrectionRequest */
+    readonly ScoreCorrectionRequest: {
+      /** Score */
+      readonly score: number;
     };
     /**
      * ServerPayload
@@ -16383,7 +16498,8 @@ export interface components {
       /** Code Block Wrap Long Lines */
       readonly code_block_wrap_long_lines?: boolean | null;
       /** Language */
-      readonly language?: ("en" | "zh" | "fr" | "de" | "uk" | "pl") | null;
+      readonly language?:
+        ("en" | "zh" | "fr" | "de" | "uk" | "pl" | "ru") | null;
       /** Response Language */
       readonly response_language?:
         | (
@@ -17206,6 +17322,8 @@ export type SchemaBodyReindexKnowledgeBaseApiKnowledgeBasesKbNameReindexPost =
   components["schemas"]["Body_reindex_knowledge_base_api_knowledge_bases__kb_name__reindex_post"];
 export type SchemaBodySpeechToTextApiVoiceSttPost =
   components["schemas"]["Body_speech_to_text_api_voice_stt_post"];
+export type SchemaBodyUploadAttachmentApiQuestionNotebookPracticeQuestionsEntryIdAttachmentsPost =
+  components["schemas"]["Body_upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post"];
 export type SchemaBodyUploadAvatarApiAuthProfileAvatarPut =
   components["schemas"]["Body_upload_avatar_api_auth_profile_avatar_put"];
 export type SchemaBodyUploadFilesApiKnowledgeBasesKbNameUploadPost =
@@ -17581,6 +17699,8 @@ export type SchemaRoundSummaryRequest =
   components["schemas"]["RoundSummaryRequest"];
 export type SchemaRunStartRequest = components["schemas"]["RunStartRequest"];
 export type SchemaRuntimeStatus = components["schemas"]["RuntimeStatus"];
+export type SchemaScoreCorrectionRequest =
+  components["schemas"]["ScoreCorrectionRequest"];
 export type SchemaServerPayload = components["schemas"]["ServerPayload"];
 export type SchemaServicePreviewPayload =
   components["schemas"]["ServicePreviewPayload"];
@@ -31985,6 +32105,81 @@ export interface operations {
       };
     };
   };
+  readonly upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly entry_id: number;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "multipart/form-data": components["schemas"]["Body_upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post"];
+      };
+    };
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly download_attachment_api_question_notebook_practice_questions__entry_id__attachments__digest__get: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly digest: string;
+        readonly entry_id: number;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
   readonly check_api_question_notebook_practice_questions__entry_id__check_post: {
     readonly parameters: {
       readonly query?: never;
@@ -32040,6 +32235,81 @@ export interface operations {
     readonly requestBody: {
       readonly content: {
         readonly "application/json": components["schemas"]["ReviewRequest"];
+      };
+    };
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly score_history_api_question_notebook_practice_questions__entry_id__scores_get: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly entry_id: number;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody?: never;
+    readonly responses: {
+      /** @description Successful Response */
+      readonly 200: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      readonly 422: {
+        headers: {
+          readonly [name: string]: unknown;
+        };
+        content: {
+          readonly "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  readonly correct_score_api_question_notebook_practice_questions__entry_id__scores__attempt_id__patch: {
+    readonly parameters: {
+      readonly query?: never;
+      readonly header?: {
+        readonly Authorization?: string | null;
+      };
+      readonly path: {
+        readonly attempt_id: string;
+        readonly entry_id: number;
+      };
+      readonly cookie?: {
+        readonly dt_token?: string | null;
+      };
+    };
+    readonly requestBody: {
+      readonly content: {
+        readonly "application/json": components["schemas"]["ScoreCorrectionRequest"];
       };
     };
     readonly responses: {

@@ -5110,6 +5110,8 @@
   "Practice analytics": "Analyses d'entraînement",
   "Practice collections": "Collections d'entraînement",
   "Practice complete": "Entraînement terminé",
+  "Primary score: {{score}} / {{max}}": "Score primaire : {{score}} / {{max}}",
+  "Adjusted manually": "Ajusté manuellement",
   "Practice progress": "Progression de l'entraînement",
   "Practice questions do not open this gate — it opens when you explain the idea in your own words and your tutor records that. Your answers here still count as practice.": "Les questions d'entraînement n'ouvrent pas ce palier — il s'ouvre lorsque vous expliquez l'idée avec vos propres mots et que votre tuteur l'enregistre. Vos réponses ici comptent tout de même comme entraînement.",
   "Practice selected ({{count}})": "S'entraîner sur la sélection ({{count}})",

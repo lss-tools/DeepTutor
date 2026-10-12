@@ -1125,7 +1125,15 @@ def _extract_followup_question_context(
             if str(value or "").strip()
         }
 
+    raw_entry_id = raw.get("notebook_entry_id")
+    notebook_entry_id = None
+    if isinstance(raw_entry_id, int) and not isinstance(raw_entry_id, bool) and raw_entry_id > 0:
+        notebook_entry_id = raw_entry_id
+    elif str(raw_entry_id or "").strip().isdigit() and int(str(raw_entry_id).strip()) > 0:
+        notebook_entry_id = int(str(raw_entry_id).strip())
+
     return {
+        "notebook_entry_id": notebook_entry_id,
         "parent_quiz_session_id": str(raw.get("parent_quiz_session_id", "") or "").strip(),
         "question_id": question_id,
         "question": question,

@@ -55,6 +55,7 @@ export interface QuizQuestion {
 }
 
 export interface QuizFollowupContext {
+  notebook_entry_id?: number;
   parent_quiz_session_id?: string;
   question_id: string;
   question: string;
@@ -212,6 +213,7 @@ export interface QuizFollowupExtras {
   userAnswerImageFilenames?: string[] | null;
   /** Last AI-judgment text for this question, if the learner ran it. */
   aiJudgment?: string | null;
+  notebookEntryId?: number | null;
 }
 
 export function buildQuizFollowupConfig(
@@ -225,6 +227,7 @@ export function buildQuizFollowupConfig(
     .map((name) => (typeof name === "string" ? name.trim() : ""))
     .filter((name) => name.length > 0);
   const context: QuizFollowupContext = {
+    notebook_entry_id: extras?.notebookEntryId ?? undefined,
     question_id: question.question_id,
     question: question.question,
     question_type: question.question_type,

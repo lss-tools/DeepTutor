@@ -10,10 +10,40 @@ def check_answer(entry: dict, answer: str) -> bool | None:
     kind = entry.get("question_type", "")
     options = entry.get("options") or json.loads(entry.get("options_json") or "{}")
     expected = str(entry.get("correct_answer") or "").strip()
+    if not expected:
+        return None
+
+    if kind == "short_answer":
+        if (
+            options
+            or not answer.strip()
+            or entry.get("checking_mode") != "auto"
+            or entry.get("answer_format") in {"interval", "pair", "ordered_pair"}
+            or (
+                entry.get("exam_subject")
+                and entry.get("reference_status") not in {"verified", "confirmed"}
+            )
+        ):
+            return None
+
+        def tokens(value: str) -> list[str]:
+            parts = re.split(r"[;,，；]", value)
+            normalized = []
+            for part in parts:
+                part = re.sub(r"\s+", "", part.strip())
+                part = re.sub(r"[−–—﹣－]", "-", part)
+                if not part:
+                    return []
+                normalized.append(part)
+            return sorted(normalized)
+
+        expected_tokens = tokens(expected)
+        actual_tokens = tokens(answer)
+        return bool(expected_tokens) and actual_tokens == expected_tokens
+
     if (
         not options
-        or not expected
-        or kind in {"qualitative", "short_answer", "essay", "free_response"}
+        or kind in {"qualitative", "essay", "free_response"}
     ):
         return None
 

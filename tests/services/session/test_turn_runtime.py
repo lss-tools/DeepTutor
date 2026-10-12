@@ -283,6 +283,7 @@ class TestExtractFollowupQuestionContext:
                 "difficulty": "easy",
                 "user_answer": "B",
                 "is_correct": False,
+                "notebook_entry_id": 42,
             }
         }
         result = _extract_followup_question_context(config)
@@ -291,6 +292,7 @@ class TestExtractFollowupQuestionContext:
         assert result["question_id"] == "q1"
         assert result["options"]["A"] == "Choice A"
         assert result["is_correct"] is False
+        assert result["notebook_entry_id"] == 42
         assert "followup_question_context" not in config  # popped
 
     def test_options_normalized(self) -> None:

@@ -4727,6 +4727,8 @@
   "{{done}} of {{total}} reviewed": "{{done}} of {{total}} reviewed",
   "Practice progress": "Practice progress",
   "Practice complete": "Practice complete",
+  "Primary score: {{score}} / {{max}}": "Primary score: {{score}} / {{max}}",
+  "Adjusted manually": "Adjusted manually",
   "{{count}} reviews saved. Your next review dates have been updated.": "{{count}} reviews saved. Your next review dates have been updated.",
   "Next review: {{date}}": "Next review: {{date}}",
   "Reload question": "Reload question",

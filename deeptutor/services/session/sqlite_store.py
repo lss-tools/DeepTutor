@@ -524,6 +524,7 @@ class SQLiteSessionStore:
             self._migrate_notebook_entries_add_assessment_review(conn)
             self._migrate_notebook_entries_add_assessment_v2(conn)
             self._migrate_notebook_entry_origins(conn)
+            self._migrate_notebook_entries_add_oge_fields(conn)
             self._migrate_assessment_attempt_origins(conn)
             self._migrate_assessment_attempt_link_state(conn)
             self._migrate_turn_runtime_columns(conn)
@@ -852,6 +853,28 @@ class SQLiteSessionStore:
             )
             """
         )
+
+    @staticmethod
+    def _migrate_notebook_entries_add_oge_fields(conn: sqlite3.Connection) -> None:
+        """Add OGE question metadata without rewriting existing notebook entries."""
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(notebook_entries)").fetchall()}
+        if not cols:
+            return
+        additions = {
+            "exam_subject": "TEXT NOT NULL DEFAULT ''",
+            "kim_year": "TEXT NOT NULL DEFAULT ''",
+            "kim_position": "TEXT NOT NULL DEFAULT ''",
+            "kim_part": "TEXT NOT NULL DEFAULT ''",
+            "answer_format": "TEXT NOT NULL DEFAULT ''",
+            "max_score": "REAL",
+            "checking_mode": "TEXT NOT NULL DEFAULT ''",
+            "question_source": "TEXT NOT NULL DEFAULT ''",
+            "is_analogue": "INTEGER NOT NULL DEFAULT 0",
+            "reference_status": "TEXT NOT NULL DEFAULT ''",
+        }
+        for name, definition in additions.items():
+            if name not in cols:
+                conn.execute(f"ALTER TABLE notebook_entries ADD COLUMN {name} {definition}")
 
     @staticmethod
     def _migrate_notebook_entry_origins(conn: sqlite3.Connection) -> None:
@@ -3854,6 +3877,18 @@ class SQLiteSessionStore:
             "correct_answer": row["correct_answer"] or "",
             "explanation": row["explanation"] or "",
             "difficulty": row["difficulty"] or "",
+            "exam_subject": row["exam_subject"] or "" if "exam_subject" in keys else "",
+            "kim_year": row["kim_year"] or "" if "kim_year" in keys else "",
+            "kim_position": row["kim_position"] or "" if "kim_position" in keys else "",
+            "kim_part": row["kim_part"] or "" if "kim_part" in keys else "",
+            "answer_format": row["answer_format"] or "" if "answer_format" in keys else "",
+            "max_score": SQLiteSessionStore._optional_float(
+                row["max_score"] if "max_score" in keys else None
+            ),
+            "checking_mode": row["checking_mode"] or "" if "checking_mode" in keys else "",
+            "question_source": row["question_source"] or "" if "question_source" in keys else "",
+            "is_analogue": bool(row["is_analogue"]) if "is_analogue" in keys else False,
+            "reference_status": row["reference_status"] or "" if "reference_status" in keys else "",
             "user_answer": row["user_answer"] or "",
             "user_answer_images": images,
             "attachments": _json_loads(row["attachments_json"], [])
@@ -4035,6 +4070,9 @@ class SQLiteSessionStore:
                 n.origin_type, n.origin_ref, n.turn_id, n.question_id,
                 n.question, n.question_type, n.options_json,
                 n.correct_answer, n.explanation, n.difficulty,
+                n.exam_subject, n.kim_year, n.kim_position, n.kim_part,
+                n.answer_format, n.max_score, n.checking_mode, n.question_source,
+                n.is_analogue, n.reference_status,
                 n.user_answer, n.user_answer_images_json, n.attachments_json, n.source, n.material_id,
                 n.material_title, n.section_id, n.section_title, n.score_trend,
                 n.assessment_type, n.result, n.mastery_path_id, n.knowledge_point_id,

@@ -44,9 +44,12 @@ export function PracticeSession({
   const { t } = useTranslation()
   const [index, setIndex] = useState(0)
   const [saved, setSaved] = useState(0)
+  const [scoreTotal, setScoreTotal] = useState(0)
+  const [scoreMaximum, setScoreMaximum] = useState(0)
   const [saving, setSaving] = useState(false)
   const [nextDue, setNextDue] = useState<number | null>(null)
   const dueDates = useRef(new Map<string, number>())
+  const scoresByEntry = useRef(new Map<string, { earned_score: number; max_score: number }>())
   const complete = index >= queue.length
   return (
     <section className="mx-auto max-w-3xl">
@@ -79,6 +82,14 @@ export function PracticeSession({
               count: saved,
             })}
           </p>
+          {scoreMaximum > 0 && (
+            <p className="mt-2 text-sm font-medium">
+              {t('Primary score: {{score}} / {{max}}', {
+                score: scoreTotal,
+                max: scoreMaximum,
+              })}
+            </p>
+          )}
           {skipped > 0 && (
             <p className="mt-2 text-sm text-muted-foreground">
               {t('{{count}} skipped questions remain due.', { count: skipped })}
@@ -104,9 +115,25 @@ export function PracticeSession({
           workspaceId={queue[index].content_workspace_id}
           workspaceName={queue[index].content_workspace_name}
           onBusy={setSaving}
-          onSaved={(due, rating) => {
+          onSaved={(due, rating, score) => {
             if (rating === 'again') setQueue(current => [...current, current[index]])
             else setSaved(value => value + 1)
+            if (score) {
+              const scoreKey = JSON.stringify([
+                queue[index].content_workspace_id,
+                queue[index].id,
+              ])
+              scoresByEntry.current.set(scoreKey, score)
+              const totals = Array.from(scoresByEntry.current.values()).reduce(
+                (sum, item) => ({
+                  earned_score: sum.earned_score + item.earned_score,
+                  max_score: sum.max_score + item.max_score,
+                }),
+                { earned_score: 0, max_score: 0 }
+              )
+              setScoreTotal(totals.earned_score)
+              setScoreMaximum(totals.max_score)
+            }
             if (due !== null) {
               dueDates.current.set(
                 JSON.stringify([queue[index].content_workspace_id, queue[index].id]),
@@ -137,7 +164,11 @@ function PracticeTurn({
   id: number
   workspaceId?: string
   workspaceName?: string
-  onSaved: (due: number | null, rating: PracticeRating) => void
+  onSaved: (
+    due: number | null,
+    rating: PracticeRating,
+    score: { earned_score: number; max_score: number } | null
+  ) => void
   onSkip: () => void
   onBusy: (busy: boolean) => void
 }) {
@@ -205,7 +236,7 @@ function PracticeTurn({
     }
     try {
       const result = await savePracticeReview(id, submission.current, workspaceId)
-      onSaved(result.due_at, result.rating)
+      onSaved(result.due_at, result.rating, result.score ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       if (err instanceof PracticeRequestError && err.status === 409) setConflict(true)
@@ -374,6 +405,21 @@ function PracticeTurn({
                   {entry.explanation && (
                     <div className="mt-3 border-t border-border pt-3">
                       <Markdown content={entry.explanation} />
+                    </div>
+                  )}
+                  {entry.practice_scores?.[0] && (
+                    <div className="mt-3 border-t border-border pt-3 text-sm">
+                      <p>
+                        {t('Primary score: {{score}} / {{max}}', {
+                          score: entry.practice_scores[0].final_score,
+                          max: entry.practice_scores[0].max_score,
+                        })}
+                      </p>
+                      {entry.practice_scores[0].manually_corrected && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t('Adjusted manually')}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

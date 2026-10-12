@@ -4741,6 +4741,8 @@
   "{{done}} of {{total}} reviewed": "Переглянуто {{done}} із {{total}}",
   "Practice progress": "Практикуйте прогрес",
   "Practice complete": "Практика завершена",
+  "Primary score: {{score}} / {{max}}": "Первинний бал: {{score}} / {{max}}",
+  "Adjusted manually": "Виправлено вручну",
   "{{count}} reviews saved. Your next review dates have been updated.": "Збережено {{count}} оглядів. Дати вашого наступного огляду оновлено.",
   "Next review: {{date}}": "Наступний огляд: {{date}}",
   "Reload question": "Перезавантажити питання",

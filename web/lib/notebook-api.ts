@@ -212,6 +212,16 @@ export interface NotebookEntry {
   correct_answer: string;
   explanation: string;
   difficulty: string;
+  exam_subject?: string;
+  kim_year?: string;
+  kim_position?: string;
+  kim_part?: string;
+  answer_format?: string;
+  max_score?: number | null;
+  checking_mode?: string;
+  question_source?: string;
+  is_analogue?: boolean;
+  reference_status?: string;
   user_answer: string;
   user_answer_images?: NotebookAnswerImage[];
   attachments?: {
@@ -243,6 +253,18 @@ export interface NotebookEntry {
   followup_session_id: string;
   /** Latest AI-judge text for this entry; empty when never run. */
   ai_judgment?: string;
+  practice_scores?: {
+    attempt_id: string;
+    model_score: number | null;
+    final_score: number;
+    max_score: number;
+    grading_source: "automatic" | "model";
+    chat_session_id: string;
+    manually_corrected: boolean;
+    edited_by: string;
+    created_at: number;
+    updated_at: number;
+  }[];
   created_at: number;
   updated_at: number;
   categories?: NotebookCategory[];

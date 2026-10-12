@@ -4723,6 +4723,8 @@
   "{{done}} of {{total}} reviewed": "Powtórzono {{done}} z {{total}}",
   "Practice progress": "Postęp ćwiczeń",
   "Practice complete": "Ćwiczenia ukończone",
+  "Primary score: {{score}} / {{max}}": "Punkty podstawowe: {{score}} / {{max}}",
+  "Adjusted manually": "Skorygowano ręcznie",
   "{{count}} reviews saved. Your next review dates have been updated.": "Zapisano {{count}} powtórek. Zaktualizowano terminy kolejnych powtórek.",
   "Next review: {{date}}": "Następna powtórka: {{date}}",
   "Reload question": "Wczytaj pytanie ponownie",

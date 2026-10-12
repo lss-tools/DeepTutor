@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+import math
 from pathlib import Path
 import sqlite3
 import time
@@ -53,6 +54,32 @@ def initialize_practice(conn: sqlite3.Connection) -> None:
             outcome_json TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_practice_history ON practice_review_events(entry_id, reviewed_at);
+        CREATE TABLE IF NOT EXISTS practice_score_events (
+            attempt_id TEXT PRIMARY KEY,
+            entry_id INTEGER NOT NULL REFERENCES notebook_entries(id) ON DELETE CASCADE,
+            model_score REAL,
+            final_score REAL NOT NULL,
+            max_score REAL NOT NULL,
+            grading_source TEXT NOT NULL,
+            chat_session_id TEXT NOT NULL DEFAULT '',
+            manually_corrected INTEGER NOT NULL DEFAULT 0,
+            edited_by TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_practice_scores_entry
+            ON practice_score_events(entry_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS practice_question_criteria (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id INTEGER NOT NULL REFERENCES notebook_entries(id) ON DELETE CASCADE,
+            score REAL NOT NULL,
+            text TEXT NOT NULL,
+            source TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            UNIQUE(entry_id, score)
+        );
+        CREATE INDEX IF NOT EXISTS idx_practice_criteria_entry
+            ON practice_question_criteria(entry_id, score);
         CREATE TABLE IF NOT EXISTS practice_imports (
             token TEXT PRIMARY KEY,
             filename TEXT NOT NULL,
@@ -310,6 +337,28 @@ class PracticeStore:
             )
             if rating == "again":
                 conn.execute("UPDATE notebook_entries SET resolved=0 WHERE id=?", (entry_id,))
+            score_result = None
+            maximum = entry["max_score"]
+            if (
+                correct is not None
+                and maximum is not None
+                and entry["checking_mode"] == "auto"
+                and not self_report
+            ):
+                maximum = float(maximum)
+                earned = maximum if correct else 0.0
+                score_result = {
+                    "earned_score": earned,
+                    "max_score": maximum,
+                    "grading_source": "automatic",
+                }
+                conn.execute(
+                    """INSERT OR IGNORE INTO practice_score_events(
+                        attempt_id, entry_id, model_score, final_score, max_score,
+                        grading_source, created_at, updated_at)
+                        VALUES(?, ?, NULL, ?, ?, 'automatic', ?, ?)""",
+                    (request_id, entry_id, earned, maximum, now, now),
+                )
             outcome = {
                 **next_state,
                 "entry_id": entry_id,
@@ -318,12 +367,133 @@ class PracticeStore:
                 "rating": rating,
                 "self_report": self_report,
                 "mastered": rating in {"good", "easy"},
+                "score": score_result,
             }
             conn.execute(
                 "INSERT INTO practice_review_events VALUES(?, ?, ?, ?, ?, ?)",
                 (request_id, entry_id, rating, answer, now, json.dumps(outcome)),
             )
         return outcome
+
+    def record_model_score(
+        self,
+        entry_id: int,
+        attempt_id: str,
+        score: float,
+        max_score: float,
+        chat_session_id: str,
+        now: float | None = None,
+    ) -> dict:
+        """Record one model grade without overwriting an existing manual correction."""
+        now = time.time() if now is None else now
+        attempt_id = attempt_id.strip()
+        if (
+            not attempt_id
+            or not math.isfinite(max_score)
+            or not math.isfinite(score)
+            or max_score <= 0
+            or score < 0
+            or score > max_score
+        ):
+            raise ValueError("A valid attempt ID and score within the maximum are required")
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            entry = conn.execute(
+                "SELECT max_score, checking_mode, reference_status, correct_answer FROM notebook_entries WHERE id=?",
+                (entry_id,),
+            ).fetchone()
+            if entry is None:
+                raise LookupError("Question not found")
+            if entry["checking_mode"] != "model":
+                raise ValueError("This question is not configured for model grading")
+            if entry["reference_status"] not in {"verified", "confirmed"}:
+                raise ValueError("The reference answer needs manual verification")
+            if not str(entry["correct_answer"] or "").strip():
+                raise ValueError("The reference answer is missing; send this question for manual review")
+            if entry["max_score"] is None or float(entry["max_score"]) != float(max_score):
+                raise ValueError("The attempt maximum does not match the question")
+            if not conn.execute(
+                "SELECT 1 FROM practice_question_criteria WHERE entry_id=? LIMIT 1",
+                (entry_id,),
+            ).fetchone():
+                raise ValueError("Scoring criteria are missing; send this question for manual review")
+            previous = conn.execute(
+                "SELECT * FROM practice_score_events WHERE attempt_id=?", (attempt_id,)
+            ).fetchone()
+            if previous:
+                if (
+                    previous["entry_id"] != entry_id
+                    or float(previous["model_score"] or 0) != float(score)
+                    or float(previous["max_score"]) != float(max_score)
+                    or previous["chat_session_id"] != chat_session_id
+                ):
+                    raise ReviewConflict("This attempt already has a different model grade")
+                return dict(previous)
+            conn.execute(
+                """INSERT INTO practice_score_events(
+                    attempt_id, entry_id, model_score, final_score, max_score,
+                    grading_source, chat_session_id, created_at, updated_at)
+                    VALUES(?, ?, ?, ?, ?, 'model', ?, ?, ?)""",
+                (attempt_id, entry_id, score, score, max_score, chat_session_id, now, now),
+            )
+            return dict(
+                conn.execute(
+                    "SELECT * FROM practice_score_events WHERE attempt_id=?", (attempt_id,)
+                ).fetchone()
+            )
+
+    def correct_score(
+        self,
+        entry_id: int,
+        attempt_id: str,
+        score: float,
+        edited_by: str,
+        now: float | None = None,
+    ) -> dict:
+        """Keep the model score and record the adult's final score separately."""
+        now = time.time() if now is None else now
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM practice_score_events WHERE attempt_id=? AND entry_id=?",
+                (attempt_id, entry_id),
+            ).fetchone()
+            if row is None:
+                raise LookupError("Scored attempt not found")
+            if not math.isfinite(score) or score < 0 or score > float(row["max_score"]):
+                raise ValueError("Score must be between zero and the attempt maximum")
+            conn.execute(
+                """UPDATE practice_score_events SET final_score=?, manually_corrected=1,
+                    edited_by=?, updated_at=? WHERE attempt_id=? AND entry_id=?""",
+                (score, edited_by, now, attempt_id, entry_id),
+            )
+            result = dict(
+                conn.execute(
+                    "SELECT * FROM practice_score_events WHERE attempt_id=? AND entry_id=?",
+                    (attempt_id, entry_id),
+                ).fetchone()
+            )
+            result["manually_corrected"] = bool(result["manually_corrected"])
+            return result
+
+    def score_history(self, entry_id: int) -> list[dict]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM practice_score_events WHERE entry_id=? ORDER BY created_at DESC, attempt_id",
+                (entry_id,),
+            ).fetchall()
+        return [
+            {**dict(row), "manually_corrected": bool(row["manually_corrected"])}
+            for row in rows
+        ]
+
+    def question_criteria(self, entry_id: int) -> list[dict]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT score, text, source, scope FROM practice_question_criteria WHERE entry_id=? ORDER BY score",
+                (entry_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def stage_import(
         self, filename: str, target: str, questions: list[dict], course_id: str = ""
@@ -376,8 +546,9 @@ class PracticeStore:
                         session_id, origin_type, origin_ref, question_id, question, question_type,
                         options_json, correct_answer, explanation, difficulty, user_answer, source,
                         result, assessment_type, created_at, updated_at, material_title, material_id,
-                        attachments_json)
-                    VALUES(NULL, 'external_import', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'import', ?, 'quiz', ?, ?, ?, ?, ?)
+                        exam_subject, kim_year, kim_position, kim_part, answer_format, max_score,
+                        checking_mode, question_source, is_analogue, reference_status, attachments_json)
+                    VALUES(NULL, 'external_import', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'import', ?, 'quiz', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                     (
                         origin_ref,
@@ -394,6 +565,16 @@ class PracticeStore:
                         now,
                         staged["filename"],
                         "import:" + token,
+                        question["exam_subject"],
+                        question["kim_year"],
+                        question["kim_position"],
+                        question["kim_part"],
+                        question["answer_format"],
+                        question["max_score"],
+                        question["checking_mode"],
+                        question["question_source"],
+                        int(question["is_analogue"]),
+                        question["reference_status"],
                         json.dumps(question.get("attachments", []), ensure_ascii=False),
                     ),
                 )
@@ -405,6 +586,63 @@ class PracticeStore:
                       AND question_id=? AND turn_id=''""",
                     (origin_ref, question["question_id"]),
                 ).fetchone()[0]
+                if question["exam_subject"]:
+                    fields = (
+                        "exam_subject",
+                        "kim_year",
+                        "kim_position",
+                        "kim_part",
+                        "answer_format",
+                        "max_score",
+                        "checking_mode",
+                        "question_source",
+                        "is_analogue",
+                        "reference_status",
+                    )
+                    current = conn.execute(
+                        "SELECT " + ", ".join(fields) + " FROM notebook_entries WHERE id=?",
+                        (entry_id,),
+                    ).fetchone()
+                    incoming = tuple(
+                        int(question[name])
+                        if name == "is_analogue"
+                        else float(question[name])
+                        if name == "max_score"
+                        else question[name]
+                        for name in fields
+                    )
+                    saved = tuple(current[name] for name in fields)
+                    if current["exam_subject"] and saved != incoming:
+                        raise ValueError("Existing question has different exam metadata")
+                    if not current["exam_subject"]:
+                        assignments = ", ".join(f"{name}=?" for name in fields)
+                        conn.execute(
+                            f"UPDATE notebook_entries SET {assignments} WHERE id=?",  # nosec B608
+                            (*incoming, entry_id),
+                        )
+                for criterion in question["criteria"]:
+                    saved_criterion = conn.execute(
+                        "SELECT text, source, scope FROM practice_question_criteria WHERE entry_id=? AND score=?",
+                        (entry_id, criterion["score"]),
+                    ).fetchone()
+                    criterion_values = (
+                        criterion["text"],
+                        criterion["source"],
+                        criterion["scope"],
+                    )
+                    if saved_criterion and tuple(saved_criterion) != criterion_values:
+                        raise ValueError("Existing question has different score criteria")
+                    conn.execute(
+                        """INSERT OR IGNORE INTO practice_question_criteria(
+                            entry_id, score, text, source, scope) VALUES(?, ?, ?, ?, ?)""",
+                        (
+                            entry_id,
+                            criterion["score"],
+                            criterion["text"],
+                            criterion["source"],
+                            criterion["scope"],
+                        ),
+                    )
                 if staged["target"] == "mistakes":
                     conn.execute(
                         "INSERT OR IGNORE INTO practice_review_state(entry_id, first_wrong_at, due_at) VALUES(?, ?, ?)",

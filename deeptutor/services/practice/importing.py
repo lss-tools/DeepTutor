@@ -6,6 +6,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 import re
 import zipfile
@@ -26,6 +27,17 @@ ALIASES = {
     "user_answer": ("user_answer", "我的答案", "作答"),
     "options": ("options", "选项"),
     "asset": ("asset",),
+    "exam_subject": ("exam_subject", "subject", "предмет"),
+    "kim_year": ("kim_year", "exam_year", "год ким"),
+    "kim_position": ("kim_position", "position", "позиция ким"),
+    "kim_part": ("kim_part", "part", "часть работы"),
+    "answer_format": ("answer_format", "формат ответа"),
+    "max_score": ("max_score", "максимальный балл позиции"),
+    "checking_mode": ("checking_mode", "verification_mode", "режим проверки"),
+    "question_source": ("question_source", "problem_source", "источник задания"),
+    "is_analogue": ("is_analogue", "аналога фипи", "аналог фипи"),
+    "reference_status": ("reference_status", "эталон проверен", "состояние эталона"),
+    "criteria": ("criteria", "критерии", "критерии баллов"),
 }
 TYPES = {
     "single_choice": "single_choice",
@@ -185,6 +197,81 @@ def normalize_question(raw: dict) -> dict:
     tags = list(dict.fromkeys(_cell(tag) for tag in tags if _cell(tag)))
     if len(tags) > 20 or any(len(tag) > 100 for tag in tags):
         raise ValueError("Use at most 20 tags, each up to 100 characters")
+    metadata_keys = (
+        "exam_subject",
+        "kim_year",
+        "kim_position",
+        "kim_part",
+        "answer_format",
+        "max_score",
+        "checking_mode",
+        "question_source",
+        "is_analogue",
+        "reference_status",
+    )
+    metadata = {key: _cell(fields[key]) for key in metadata_keys}
+    is_exam_question = any(value for key, value in metadata.items() if key != "is_analogue")
+    if is_exam_question:
+        if not metadata["kim_position"]:
+            raise ValueError("KIM position is required for exam questions")
+        if not metadata["question_source"]:
+            raise ValueError("Question source is required for exam questions")
+        missing = [
+            key
+            for key in (
+                "exam_subject",
+                "kim_year",
+                "kim_part",
+                "answer_format",
+                "max_score",
+                "checking_mode",
+                "reference_status",
+            )
+            if not metadata[key]
+        ]
+        if missing:
+            raise ValueError("Exam metadata is incomplete: " + ", ".join(missing))
+        try:
+            max_score = float(metadata["max_score"])
+        except ValueError as exc:
+            raise ValueError("Maximum position score must be numeric") from exc
+        if not math.isfinite(max_score) or max_score <= 0:
+            raise ValueError("Maximum position score must be a positive finite number")
+        metadata["max_score"] = str(max_score)
+        analogue_value = metadata["is_analogue"].casefold()
+        if analogue_value not in {"true", "false", "1", "0", "да", "нет"}:
+            raise ValueError("Analogue flag must be true or false")
+        metadata["is_analogue"] = analogue_value in {"true", "1", "да"}
+        raw_criteria = fields["criteria"]
+        if isinstance(raw_criteria, str):
+            try:
+                raw_criteria = json.loads(raw_criteria)
+            except json.JSONDecodeError as exc:
+                raise ValueError("Exam criteria must be a JSON array") from exc
+        if not isinstance(raw_criteria, list) or not raw_criteria:
+            raise ValueError("Exam questions need score criteria with source and scope")
+        criteria = []
+        for item in raw_criteria:
+            if not isinstance(item, dict):
+                raise ValueError("Each criterion must be an object")
+            try:
+                score = float(item.get("score"))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Each criterion needs a numeric score") from exc
+            if not math.isfinite(score):
+                raise ValueError("Criterion score must be finite")
+            text = _cell(item.get("text"))
+            source = _cell(item.get("source"))
+            scope = _cell(item.get("scope"))
+            if not 0 <= score <= float(metadata["max_score"]):
+                raise ValueError("Criterion score must be within the position maximum")
+            if not text or not source or not scope:
+                raise ValueError("Each criterion needs text, source and scope")
+            criteria.append({"score": score, "text": text, "source": source, "scope": scope})
+    else:
+        metadata["max_score"] = None
+        metadata["is_analogue"] = False
+        criteria = []
     result = dict(
         question=question,
         question_type=kind,
@@ -194,6 +281,8 @@ def normalize_question(raw: dict) -> dict:
         difficulty=_cell(fields["difficulty"]),
         user_answer=_cell(fields["user_answer"]),
         tags=tags,
+        criteria=criteria,
+        **metadata,
     )
     asset_value = fields["asset"]
     if asset_value:
@@ -203,7 +292,8 @@ def normalize_question(raw: dict) -> dict:
             raise ValueError("Asset must be a filename or a list of filenames")
         result["asset"] = [item.strip() for item in asset_value if item.strip()]
     identity = {
-        key: result[key] for key in ("question", "question_type", "options", "correct_answer")
+        key: result[key]
+        for key in ("question", "question_type", "options", "correct_answer")
     }
     result["question_id"] = (
         "import:"

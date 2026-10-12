@@ -4727,6 +4727,8 @@
   "{{done}} of {{total}} reviewed": "已复习 {{done}} / {{total}} 道",
   "Practice progress": "练习进度",
   "Practice complete": "本组练习已完成",
+  "Primary score: {{score}} / {{max}}": "原始分：{{score}} / {{max}}",
+  "Adjusted manually": "已手动调整",
   "{{count}} reviews saved. Your next review dates have been updated.": "已保存 {{count}} 次复习记录，并更新下次复习时间。",
   "Next review: {{date}}": "下次复习：{{date}}",
   "Reload question": "重新加载题目",

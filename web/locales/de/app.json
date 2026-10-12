@@ -4724,6 +4724,8 @@
   "{{done}} of {{total}} reviewed": "{{done}} von {{total}} wiederholt",
   "Practice progress": "Übungsfortschritt",
   "Practice complete": "Übung abgeschlossen",
+  "Primary score: {{score}} / {{max}}": "Primärpunkte: {{score}} / {{max}}",
+  "Adjusted manually": "Manuell angepasst",
   "{{count}} reviews saved. Your next review dates have been updated.": "{{count}} Wiederholungen gespeichert. Deine nächsten Wiederholungstermine wurden aktualisiert.",
   "Next review: {{date}}": "Nächste Wiederholung: {{date}}",
   "Reload question": "Frage neu laden",

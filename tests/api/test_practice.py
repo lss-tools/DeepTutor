@@ -14,6 +14,7 @@ import pytest
 
 from deeptutor.api.routers import practice, question_notebook
 from deeptutor.core.assessment import ASSESSMENT_SOURCES
+from deeptutor.services.practice.answers import check_answer
 from deeptutor.services.practice.importing import normalize_question, preview
 from deeptutor.services.practice.scheduler import DAY, day_bounds, schedule
 from deeptutor.services.practice.storage import PracticeStore, ReviewConflict
@@ -393,3 +394,258 @@ def test_analytics_local_midnight_dst_zero_days_and_deleted_sources(bank):
     with repo.connect() as conn:
         conn.execute("UPDATE sessions SET deleted_at=? WHERE id='lesson'", (now,))
     assert repo.analytics("America/New_York", 7, now=now)["sources"] == []
+
+
+def test_exam_import_requires_position_and_source_and_returns_metadata(bank):
+    store, repo, client = bank
+    legacy = normalize_question({"question": "x = ?", "answer": "2"})
+    assert repo.commit_import(repo.stage_import("legacy.json", "bank", [legacy]))["created"] == 1
+    question = normalize_question(
+        {
+            "question": "x = ?",
+            "answer": "2",
+            "subject": "math",
+            "kim_year": "2027",
+            "kim_position": "20",
+            "kim_part": "2",
+            "answer_format": "exact",
+            "max_score": "2",
+            "checking_mode": "auto",
+            "question_source": "sdamgia",
+            "is_analogue": True,
+            "reference_status": "verified",
+            "criteria": [
+                {"score": 2, "text": "Fully correct", "source": "FIPI demo", "scope": "position 20"}
+            ],
+        }
+    )
+    upgraded_import = repo.commit_import(repo.stage_import("oge.json", "bank", [question]))
+    assert upgraded_import == {"created": 0, "duplicates": 1, "total": 1}
+    entries = asyncio.run(store.list_notebook_entries())
+    entry = next(item for item in entries["items"] if item["question_id"] == question["question_id"])
+    assert entry["kim_position"] == "20"
+    assert entry["question_source"] == "sdamgia"
+    assert entry["is_analogue"] is True
+    assert entry["max_score"] == 2
+    assert client.get(f"/bank/entries/{entry['id']}").json()["reference_status"] == "verified"
+    practice_entry = client.get(f"/practice/questions/{entry['id']}").json()["entry"]
+    assert practice_entry["criteria"] == [
+        {"score": 2, "text": "Fully correct", "source": "FIPI demo", "scope": "position 20"}
+    ]
+    assert client.post(f"/practice/questions/{entry['id']}/check", json={"answer": "2"}).json() == {
+        "correct": True
+    }
+    assert client.post(f"/practice/questions/{entry['id']}/check", json={"answer": "3"}).json() == {
+        "correct": False
+    }
+    assert client.post(f"/practice/questions/{entry['id']}/check", json={"answer": ""}).json() == {
+        "correct": None
+    }
+    reviewed = client.post(
+        f"/practice/questions/{entry['id']}/review",
+        json={
+            "request_id": "oge-attempt-0000001",
+            "version": 0,
+            "rating": "good",
+            "answer": "2",
+        },
+    )
+    assert reviewed.status_code == 200
+    score_rows = client.get(f"/practice/questions/{entry['id']}/scores").json()["items"]
+    assert score_rows[0]["final_score"] == 2
+    assert score_rows[0]["max_score"] == 2
+    assert score_rows[0]["grading_source"] == "automatic"
+    recalled = client.get(f"/practice/questions/{entry['id']}").json()["entry"]
+    assert recalled["practice_scores"][0]["final_score"] == 2
+
+    for field in ("kim_position", "question_source"):
+        incomplete = {
+            "question": "x = ?",
+            "answer": "2",
+            "subject": "math",
+            "kim_year": "2027",
+            "kim_position": "20",
+            "kim_part": "2",
+            "answer_format": "exact",
+            "max_score": "2",
+            "checking_mode": "auto",
+            "question_source": "sdamgia",
+            "is_analogue": False,
+            "reference_status": "verified",
+            "criteria": [
+                {"score": 2, "text": "Fully correct", "source": "FIPI demo", "scope": "position 20"}
+            ],
+        }
+        incomplete[field] = ""
+        with pytest.raises(ValueError, match="position|source"):
+            normalize_question(incomplete)
+
+
+def test_model_score_is_linked_and_only_adults_can_correct_it(bank, monkeypatch):
+    store, repo, client = bank
+    question = normalize_question(
+        {
+            "question": "x = ?",
+            "answer": "2",
+            "subject": "math",
+            "kim_year": "2027",
+            "kim_position": "20",
+            "kim_part": "2",
+            "answer_format": "exact",
+            "max_score": "2",
+            "checking_mode": "model",
+            "question_source": "sdamgia",
+            "is_analogue": True,
+            "reference_status": "verified",
+            "criteria": [
+                {"score": 2, "text": "Fully correct", "source": "FIPI demo", "scope": "position 20"}
+            ],
+        }
+    )
+    repo.commit_import(repo.stage_import("oge-model.json", "bank", [question]))
+    entry = next(
+        item
+        for item in asyncio.run(store.list_notebook_entries())["items"]
+        if item["question_id"] == question["question_id"]
+    )
+    model_grade = repo.record_model_score(
+        entry["id"], "chat-turn-1234567890", 1, 2, "chat-session-123456"
+    )
+    assert model_grade["model_score"] == model_grade["final_score"] == 1
+    assert model_grade["chat_session_id"] == "chat-session-123456"
+    corrected = client.patch(
+        f"/practice/questions/{entry['id']}/scores/chat-turn-1234567890",
+        json={"score": 2},
+    )
+    assert corrected.status_code == 200
+    assert corrected.json()["model_score"] == 1
+    assert corrected.json()["final_score"] == 2
+    assert corrected.json()["manually_corrected"] is True
+    shown = client.get(f"/practice/questions/{entry['id']}").json()["entry"]["practice_scores"][0]
+    assert shown["model_score"] == 1
+    assert shown["final_score"] == 2
+    assert shown["manually_corrected"] is True
+
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(practice, "get_current_user", lambda: SimpleNamespace(role="student"))
+    denied = client.patch(
+        f"/practice/questions/{entry['id']}/scores/chat-turn-1234567890",
+        json={"score": 0},
+    )
+    assert denied.status_code == 403
+
+
+@pytest.mark.parametrize("answer", ["−1; 0; 6", "-1, 0, 6", "6; 0; -1"])
+def test_short_answer_autocheck_normalizes_only_formatting(answer):
+    entry = {
+        "question_type": "short_answer",
+        "correct_answer": "-1; 0; 6",
+        "checking_mode": "auto",
+        "answer_format": "roots",
+    }
+    assert check_answer(entry, answer) is True
+
+
+@pytest.mark.parametrize("answer", ["-1; 0", "-1; 0; 6; 2", "0,67"])
+def test_short_answer_autocheck_rejects_incomplete_extra_and_rounded(answer):
+    entry = {
+        "question_type": "short_answer",
+        "correct_answer": "2/3" if answer == "0,67" else "-1; 0; 6",
+        "checking_mode": "auto",
+        "answer_format": "exact",
+    }
+    assert check_answer(entry, answer) is False
+
+
+@pytest.mark.parametrize(
+    ("entry", "answer"),
+    [
+        ({"question_type": "short_answer", "correct_answer": "1", "checking_mode": "auto"}, ""),
+        (
+            {
+                "question_type": "short_answer",
+                "correct_answer": "(1; 2)",
+                "checking_mode": "model",
+                "answer_format": "interval",
+            },
+            "(1; 2)",
+        ),
+        (
+            {
+                "question_type": "short_answer",
+                "correct_answer": "(1; 2)",
+                "checking_mode": "auto",
+                "answer_format": "ordered_pair",
+            },
+            "(1; 2)",
+        ),
+    ],
+)
+def test_short_answer_autocheck_leaves_blank_model_and_structured_answers_ungraded(entry, answer):
+    assert check_answer(entry, answer) is None
+
+
+def test_short_answer_autocheck_requires_verified_reference_for_exam_card():
+    entry = {
+        "question_type": "short_answer",
+        "correct_answer": "2",
+        "checking_mode": "auto",
+        "answer_format": "exact",
+        "exam_subject": "math",
+        "reference_status": "unverified",
+    }
+    assert check_answer(entry, "2") is None
+
+
+def test_oge_2027_pilot_position_20_ten_card_api_check(bank):
+    store, repo, client = bank
+    pilot = [
+        (12623, "1", "1", "auto", "exact"),
+        (12627, "−1; 0; 6", "6, 0, -1", "auto", "roots"),
+        (12631, "−5; −1; 1", "1; -5; -1", "auto", "roots"),
+        (12669, "−5", "-5", "auto", "exact"),
+        (12683, "4; 5", "5, 4", "auto", "roots"),
+        (12719, "−2", "-2", "auto", "exact"),
+        (12724, "−1", "-1", "auto", "exact"),
+        (12731, "(2/3; 2)", "(2/3; 2)", "model", "interval"),
+        (12757, "(1; 1+sqrt(2))", "(1; 1+sqrt(2))", "model", "interval"),
+        (12788, "(-1; 4); (1; 4)", "(-1; 4); (1; 4)", "model", "pair"),
+    ]
+
+    questions = [
+        normalize_question(
+            {
+                "question": f"Pilot task {task_id}",
+                "question_type": "short_answer",
+                "correct_answer": expected,
+                "exam_subject": "math",
+                "kim_year": "2027",
+                "kim_position": "20",
+                "kim_part": "2",
+                "answer_format": answer_format,
+                "max_score": 2,
+                "checking_mode": checking_mode,
+                "question_source": "sdamgia",
+                "is_analogue": True,
+                "reference_status": "verified",
+                "criteria": [
+                    {"score": score, "text": f"Criterion {score}", "source": "FIPI demo", "scope": "position 20"}
+                    for score in (0, 1, 2)
+                ],
+            }
+        )
+        for task_id, expected, _, checking_mode, answer_format in pilot
+    ]
+    staged = repo.stage_import("oge-pilot.json", "pilot", questions)
+    assert repo.commit_import(staged)["created"] == 10
+    entries = asyncio.run(store.list_notebook_entries())
+    by_question = {item["question"]: item for item in entries["items"]}
+    assert len(pilot) == 10
+    for task_id, _, answer, checking_mode, _ in pilot:
+        item = by_question[f"Pilot task {task_id}"]
+        response = client.post(
+            f"/practice/questions/{item['id']}/check", json={"answer": answer}
+        )
+        assert response.status_code == 200
+        assert response.json()["correct"] is (True if checking_mode == "auto" else None)

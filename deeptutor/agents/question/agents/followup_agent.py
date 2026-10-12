@@ -48,6 +48,28 @@ class FollowupAgent(BaseAgent):
             history_context=history_context or "(none)",
             user_message=user_message.strip() or "(empty)",
         )
+        if question_context.get("checking_mode") == "model":
+            criteria = question_context.get("criteria") or []
+            maximum = question_context.get("max_score")
+            if (
+                question_context.get("reference_status") in {"verified", "confirmed"}
+                and criteria
+                and maximum is not None
+            ):
+                user_prompt += (
+                    "\n\nOfficial score rule: grade only against this exact question, "
+                    "verified reference answer, and listed criteria. Do not use your "
+                    "general knowledge to replace missing or mismatched reference data. "
+                    "Award a score from 0 through the stated maximum. End your answer "
+                    "with exactly one machine-readable line: "
+                    f"[[OGE_SCORE: score / {maximum}]]."
+                )
+            else:
+                user_prompt += (
+                    "\n\nOfficial score rule: the verified reference answer or criteria "
+                    "are missing. Do not assign a score. Explain that manual review is "
+                    "needed and end with [[OGE_SCORE: manual_review]]."
+                )
 
         _chunks: list[str] = []
         async for _c in self.stream_llm(
@@ -115,4 +137,22 @@ class FollowupAgent(BaseAgent):
         knowledge_context = str(question_context.get("knowledge_context", "") or "").strip()
         if knowledge_context:
             lines.extend(["", "Knowledge context:", knowledge_context])
+        if question_context.get("checking_mode") == "model":
+            lines.extend(
+                [
+                    "",
+                    f"Reference status: {question_context.get('reference_status') or '(none)'}",
+                    f"Maximum score: {question_context.get('max_score') or '(none)'}",
+                    "Scoring criteria:",
+                ]
+            )
+            criteria = question_context.get("criteria") or []
+            if criteria:
+                lines.extend(
+                    f"{item.get('score')}: {item.get('text')} [source: {item.get('source')}; scope: {item.get('scope')}]"
+                    for item in criteria
+                    if isinstance(item, dict)
+                )
+            else:
+                lines.append("(none)")
         return "\n".join(lines).strip()

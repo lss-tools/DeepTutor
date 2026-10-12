@@ -4727,6 +4727,8 @@
   "{{done}} of {{total}} reviewed": "Повторено {{done}} из {{total}}",
   "Practice progress": "Прогресс практики",
   "Practice complete": "Практика завершена",
+  "Primary score: {{score}} / {{max}}": "Первичный балл: {{score}} / {{max}}",
+  "Adjusted manually": "Исправлен вручную",
   "{{count}} reviews saved. Your next review dates have been updated.": "Повторений сохранено: {{count}}. Даты следующих повторений обновлены.",
   "Next review: {{date}}": "Следующее повторение: {{date}}",
   "Reload question": "Перезагрузить вопрос",

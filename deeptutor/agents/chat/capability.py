@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import re
+
 from deeptutor.agents.chat.agentic_pipeline import CHAT_OPTIONAL_TOOLS, AgenticChatPipeline
 from deeptutor.core.capability_protocol import CapabilityManifest, TurnCapability
 from deeptutor.core.context import UnifiedContext
 from deeptutor.runtime.request_contracts import get_capability_request_schema
 from deeptutor.runtime.stream_bus import StreamBus
+
+_OGE_SCORE_COMMENT = re.compile(
+    r"(?:\A|\n)<!--\s*OGE_SCORE:\s*(?:(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)\s*;\s*attempt=([A-Za-z0-9_-]{1,100})|manual_review)\s*-->\s*\Z",
+    re.IGNORECASE,
+)
 
 
 class ChatCapability(TurnCapability):
@@ -24,4 +32,70 @@ class ChatCapability(TurnCapability):
 
     async def run(self, context: UnifiedContext, stream: StreamBus) -> None:
         pipeline = AgenticChatPipeline(language=context.language)
+        store = None
+        entry_id = self._single_question_reference(context)
+        turn_id = context.runtime.turn_id or str(context.metadata.get("turn_id") or "")
+        if entry_id:
+            from deeptutor.services.practice.storage import PracticeStore
+            from deeptutor.services.session import get_sqlite_session_store
+
+            store = get_sqlite_session_store()
+            entry = await store.get_notebook_entry(entry_id)
+            if entry and entry.get("checking_mode") == "model":
+                criteria = await asyncio.to_thread(
+                    PracticeStore(store.db_path).question_criteria, entry_id
+                )
+                if turn_id:
+                    context.user_message += self._oge_grading_instruction(
+                        entry, criteria, turn_id
+                    )
         await pipeline.run(context, stream)
+        if store and entry_id and context.session_id:
+            last_message = await store.get_last_message(context.session_id, role="assistant")
+            content = str((last_message or {}).get("content") or "")
+            match = _OGE_SCORE_COMMENT.search(content)
+            if match and match.group(1) and match.group(2) and match.group(3) == turn_id:
+                try:
+                    await asyncio.to_thread(
+                        PracticeStore(store.db_path).record_model_score,
+                        entry_id,
+                        turn_id,
+                        float(match.group(1)),
+                        float(match.group(2)),
+                        context.session_id,
+                    )
+                except (LookupError, ValueError):
+                    pass
+
+    @staticmethod
+    def _single_question_reference(context: UnifiedContext) -> int | None:
+        references = context.metadata.get("question_notebook_references") or []
+        if not isinstance(references, list) or len(references) != 1:
+            return None
+        value = references[0]
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            return value
+        text = str(value or "").strip()
+        return int(text) if text.isdigit() and int(text) > 0 else None
+
+    @staticmethod
+    def _oge_grading_instruction(entry: dict, criteria: list[dict], turn_id: str) -> str:
+        maximum = float(entry["max_score"] or 0)
+        criteria_lines = "\n".join(
+            f"- {item['score']}: {item['text']} (source: {item['source']}; scope: {item['scope']})"
+            for item in criteria
+        ) or "(none)"
+        return (
+            "\n\n[Official OGE grading context for the single selected question]\n"
+            f"Question: {entry['question']}\nReference answer: {entry['correct_answer'] or '(none)'}\n"
+            f"Reference status: {entry.get('reference_status') or '(none)'}\n"
+            f"Maximum score: {maximum:g}\nCriteria:\n{criteria_lines}\n"
+            "If the user explicitly asks you to grade a solution, use only this exact "
+            "question, its verified reference, and these criteria. If the reference is "
+            "missing, unverified, or belongs to another question, do not grade from general "
+            "knowledge. Explain that manual review is needed and end with "
+            "<!--OGE_SCORE: manual_review--> . Otherwise give a score within the maximum "
+            f"and end with <!--OGE_SCORE: score / {maximum:g}; attempt={turn_id}--> . "
+            "Do not emit either "
+            "marker when the user did not ask for grading.\n"
+        )

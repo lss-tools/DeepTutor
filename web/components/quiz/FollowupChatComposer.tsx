@@ -111,6 +111,7 @@ function FollowupChatComposerImpl({ context }: FollowupChatComposerProps) {
                 (image) => image.filename,
               ),
               aiJudgment: context.aiJudgment,
+              notebookEntryId: context.notebookEntryId,
             },
           );
 

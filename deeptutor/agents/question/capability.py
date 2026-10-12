@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from pathlib import Path
+import re
 import tempfile
 from typing import Any
 
@@ -24,6 +25,11 @@ from deeptutor.i18n import StatusI18n
 from deeptutor.runtime.agentic.usage import UsageTracker
 from deeptutor.runtime.request_contracts import get_capability_request_schema
 from deeptutor.runtime.stream_bus import StreamBus
+
+_OGE_SCORE_MARKER = re.compile(
+    r"(?:\A|\n)\[\[OGE_SCORE:\s*(?:(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)|manual_review)\s*\]\]\s*\Z",
+    re.IGNORECASE,
+)
 
 
 class DeepQuestionCapability(TurnCapability):
@@ -75,6 +81,33 @@ class DeepQuestionCapability(TurnCapability):
         if isinstance(followup_question_context, dict) and followup_question_context.get(
             "question"
         ):
+            notebook_entry_id = followup_question_context.get("notebook_entry_id")
+            if notebook_entry_id:
+                from deeptutor.services.practice.storage import PracticeStore
+                from deeptutor.services.session import get_sqlite_session_store
+
+                question_store = get_sqlite_session_store()
+                entry = await question_store.get_notebook_entry(int(notebook_entry_id))
+                if entry:
+                    criteria = await asyncio.to_thread(
+                        PracticeStore(question_store.db_path).question_criteria,
+                        int(notebook_entry_id),
+                    )
+                    followup_question_context.update(
+                        {
+                            "question": entry["question"],
+                            "question_type": entry["question_type"],
+                            "correct_answer": entry["correct_answer"],
+                            "explanation": entry["explanation"],
+                            "answer_format": entry.get("answer_format", ""),
+                            "checking_mode": entry.get("checking_mode", ""),
+                            "max_score": entry.get("max_score"),
+                            "reference_status": entry.get("reference_status", ""),
+                            "question_source": entry.get("question_source", ""),
+                            "criteria": criteria,
+                        }
+                    )
+
             from deeptutor.agents.question.agents.followup_agent import FollowupAgent
 
             usage = UsageTracker(model=getattr(llm_config, "model", None))
@@ -95,13 +128,41 @@ class DeepQuestionCapability(TurnCapability):
                     ).strip(),
                     attachments=context.attachments,
                 )
-                if answer:
-                    await stream.content(answer, source=self.name, stage="generation")
+                response_text = answer or ""
+                score_recorded = None
+                score_match = _OGE_SCORE_MARKER.search(response_text)
+                if score_match:
+                    response_text = response_text[: score_match.start()].rstrip()
+                    if score_match.group(1) and score_match.group(2) and notebook_entry_id:
+                        max_score = followup_question_context.get("max_score")
+                        turn_id = context.runtime.turn_id or str(
+                            context.metadata.get("turn_id", "") or ""
+                        )
+                        try:
+                            if (
+                                max_score is not None
+                                and turn_id
+                                and float(score_match.group(2)) == float(max_score)
+                            ):
+                                score_recorded = await asyncio.to_thread(
+                                    PracticeStore(question_store.db_path).record_model_score,
+                                    int(notebook_entry_id),
+                                    turn_id,
+                                    float(score_match.group(1)),
+                                    float(max_score),
+                                    context.session_id,
+                                )
+                        except (LookupError, ValueError):
+                            score_recorded = None
+                if response_text:
+                    await stream.content(response_text, source=self.name, stage="generation")
                 followup_payload: dict[str, Any] = {
-                    "response": answer or "",
+                    "response": response_text,
                     "mode": "followup",
                     "question_id": followup_question_context.get("question_id", ""),
                 }
+                if score_recorded:
+                    followup_payload["score"] = score_recorded
                 await emit_capability_result(
                     stream, followup_payload, source=self.name, usage=usage
                 )

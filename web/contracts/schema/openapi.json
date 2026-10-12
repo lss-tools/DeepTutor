@@ -784,7 +784,7 @@
       "Body_admin_import_users_api_auth_users_import_post": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           }
@@ -805,7 +805,7 @@
           "files": {
             "default": [],
             "items": {
-              "format": "binary",
+              "contentMediaType": "application/octet-stream",
               "type": "string"
             },
             "title": "Files",
@@ -863,7 +863,7 @@
       "Body_import_docx_api_documents_import_docx_post": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           }
@@ -883,7 +883,7 @@
             "type": "string"
           },
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           },
@@ -906,7 +906,7 @@
       "Body_import_visualizer_api_visualizers_import_post": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           }
@@ -920,8 +920,8 @@
       "Body_library_add": {
         "properties": {
           "file": {
+            "contentMediaType": "application/octet-stream",
             "description": "Raw file bytes",
-            "format": "binary",
             "title": "File",
             "type": "string"
           },
@@ -946,7 +946,7 @@
       "Body_preview_office_upload_api_file_preview_pdf_post": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           }
@@ -981,7 +981,7 @@
       "Body_speech_to_text_api_voice_stt_post": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           },
@@ -1003,10 +1003,24 @@
         "title": "Body_speech_to_text_api_voice_stt_post",
         "type": "object"
       },
+      "Body_upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post",
+        "type": "object"
+      },
       "Body_upload_avatar_api_auth_profile_avatar_put": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           }
@@ -1025,7 +1039,7 @@
           },
           "files": {
             "items": {
-              "format": "binary",
+              "contentMediaType": "application/octet-stream",
               "type": "string"
             },
             "title": "Files",
@@ -1064,7 +1078,7 @@
       "Body_upload_material_api_reading_materials_post": {
         "properties": {
           "file": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File",
             "type": "string"
           }
@@ -4695,7 +4709,8 @@
               "fr",
               "de",
               "uk",
-              "pl"
+              "pl",
+              "ru"
             ],
             "title": "Language",
             "type": "string"
@@ -6657,10 +6672,24 @@
             "title": "Ai Judgment",
             "type": "string"
           },
+          "answer_format": {
+            "default": "",
+            "title": "Answer Format",
+            "type": "string"
+          },
           "assessment_type": {
             "default": "",
             "title": "Assessment Type",
             "type": "string"
+          },
+          "attachments": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Attachments",
+            "type": "array"
           },
           "attempt_count": {
             "default": 1,
@@ -6686,6 +6715,11 @@
             ],
             "title": "Categories"
           },
+          "checking_mode": {
+            "default": "",
+            "title": "Checking Mode",
+            "type": "string"
+          },
           "confidence": {
             "anyOf": [
               {
@@ -6706,9 +6740,22 @@
             "title": "Created At",
             "type": "number"
           },
+          "criteria": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Criteria",
+            "type": "array"
+          },
           "difficulty": {
             "default": "",
             "title": "Difficulty",
+            "type": "string"
+          },
+          "exam_subject": {
+            "default": "",
+            "title": "Exam Subject",
             "type": "string"
           },
           "explanation": {
@@ -6730,10 +6777,30 @@
             "title": "Id",
             "type": "integer"
           },
+          "is_analogue": {
+            "default": false,
+            "title": "Is Analogue",
+            "type": "boolean"
+          },
           "is_correct": {
             "default": false,
             "title": "Is Correct",
             "type": "boolean"
+          },
+          "kim_part": {
+            "default": "",
+            "title": "Kim Part",
+            "type": "string"
+          },
+          "kim_position": {
+            "default": "",
+            "title": "Kim Position",
+            "type": "string"
+          },
+          "kim_year": {
+            "default": "",
+            "title": "Kim Year",
+            "type": "string"
           },
           "knowledge_point_id": {
             "default": "",
@@ -6754,6 +6821,17 @@
             "default": "",
             "title": "Material Title",
             "type": "string"
+          },
+          "max_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Score"
           },
           "options": {
             "additionalProperties": {
@@ -6790,6 +6868,14 @@
             ],
             "title": "Practice"
           },
+          "practice_scores": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Practice Scores",
+            "type": "array"
+          },
           "quality": {
             "anyOf": [
               {
@@ -6810,9 +6896,19 @@
             "title": "Question Id",
             "type": "string"
           },
+          "question_source": {
+            "default": "",
+            "title": "Question Source",
+            "type": "string"
+          },
           "question_type": {
             "default": "",
             "title": "Question Type",
+            "type": "string"
+          },
+          "reference_status": {
+            "default": "",
+            "title": "Reference Status",
             "type": "string"
           },
           "resolved": {
@@ -8984,6 +9080,20 @@
           "recovery_interval_seconds"
         ],
         "title": "RuntimeStatus",
+        "type": "object"
+      },
+      "ScoreCorrectionRequest": {
+        "properties": {
+          "score": {
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "score"
+        ],
+        "title": "ScoreCorrectionRequest",
         "type": "object"
       },
       "ServerPayload": {
@@ -11340,7 +11450,8 @@
                   "fr",
                   "de",
                   "uk",
-                  "pl"
+                  "pl",
+                  "ru"
                 ],
                 "type": "string"
               },
@@ -42770,6 +42881,169 @@
         ]
       }
     },
+    "/api/question-notebook/practice/questions/{entry_id}/attachments": {
+      "post": {
+        "operationId": "upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "dt_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dt Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_attachment_api_question_notebook_practice_questions__entry_id__attachments_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Attachment",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/question-notebook/practice/questions/{entry_id}/attachments/{digest}": {
+      "get": {
+        "operationId": "download_attachment_api_question_notebook_practice_questions__entry_id__attachments__digest__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "digest",
+            "required": true,
+            "schema": {
+              "title": "Digest",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "dt_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dt Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Attachment",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
     "/api/question-notebook/practice/questions/{entry_id}/check": {
       "post": {
         "operationId": "check_api_question_notebook_practice_questions__entry_id__check_post",
@@ -42929,6 +43203,169 @@
           }
         },
         "summary": "Review",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/question-notebook/practice/questions/{entry_id}/scores": {
+      "get": {
+        "operationId": "score_history_api_question_notebook_practice_questions__entry_id__scores_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "dt_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dt Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Score History",
+        "tags": [
+          "practice"
+        ]
+      }
+    },
+    "/api/question-notebook/practice/questions/{entry_id}/scores/{attempt_id}": {
+      "patch": {
+        "operationId": "correct_score_api_question_notebook_practice_questions__entry_id__scores__attempt_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "dt_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dt Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScoreCorrectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Correct Score",
         "tags": [
           "practice"
         ]

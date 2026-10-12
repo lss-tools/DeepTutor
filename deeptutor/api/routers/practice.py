@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from deeptutor.api.utils.http_headers import content_disposition
+from deeptutor.multi_user.context import get_current_user
 from deeptutor.services.practice.answers import check_answer
 from deeptutor.services.practice.assets import MAX_ASSET_BYTES, PracticeAssetStore
 from deeptutor.services.practice.importing import MAX_ARCHIVE_BYTES, MAX_BYTES, preview
@@ -80,6 +81,10 @@ class ReviewRequest(AnswerRequest):
     request_id: str = Field(min_length=16, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
     version: int = Field(ge=0)
     rating: Rating
+
+
+class ScoreCorrectionRequest(BaseModel):
+    score: float = Field(ge=0)
 
 
 class CommitRequest(BaseModel):
@@ -231,6 +236,12 @@ async def practice_analytics(
 @router.get("/questions/{entry_id}", response_model=PracticeQuestion)
 async def practice_question(entry_id: int):
     entry = await _entry(entry_id)
+    entry["practice_scores"] = await asyncio.to_thread(
+        PracticeStore(get_sqlite_session_store().db_path).score_history, entry_id
+    )
+    entry["criteria"] = await asyncio.to_thread(
+        PracticeStore(get_sqlite_session_store().db_path).question_criteria, entry_id
+    )
     state = await asyncio.to_thread(
         PracticeStore(get_sqlite_session_store().db_path).state, entry_id
     )
@@ -279,6 +290,35 @@ async def download_attachment(entry_id: int, digest: str):
 async def check(entry_id: int, payload: AnswerRequest):
     entry = await _entry(entry_id)
     return {"correct": check_answer(entry, payload.answer)}
+
+
+@router.get("/questions/{entry_id}/scores")
+async def score_history(entry_id: int):
+    await _entry(entry_id)
+    return {
+        "items": await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).score_history, entry_id
+        )
+    }
+
+
+@router.patch("/questions/{entry_id}/scores/{attempt_id}")
+async def correct_score(entry_id: int, attempt_id: str, payload: ScoreCorrectionRequest):
+    if get_current_user().role not in {"admin", "teacher"}:
+        raise HTTPException(403, "Only an adult account can change an exam score")
+    await _entry(entry_id)
+    try:
+        return await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).correct_score,
+            entry_id,
+            attempt_id,
+            payload.score,
+            get_current_user().id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.post("/questions/{entry_id}/review")

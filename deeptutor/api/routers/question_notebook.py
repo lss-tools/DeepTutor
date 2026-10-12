@@ -59,6 +59,16 @@ class NotebookEntryItem(BaseModel):
     correct_answer: str = ""
     explanation: str = ""
     difficulty: str = ""
+    exam_subject: str = ""
+    kim_year: str = ""
+    kim_position: str = ""
+    kim_part: str = ""
+    answer_format: str = ""
+    max_score: float | None = None
+    checking_mode: str = ""
+    question_source: str = ""
+    is_analogue: bool = False
+    reference_status: str = ""
     user_answer: str = ""
     user_answer_images: list[AnswerImageItem] = []
     attachments: list[dict] = []
@@ -82,6 +92,8 @@ class NotebookEntryItem(BaseModel):
     bookmarked: bool = False
     followup_session_id: str = ""
     ai_judgment: str = ""
+    practice_scores: list[dict[str, Any]] = Field(default_factory=list)
+    criteria: list[dict[str, Any]] = Field(default_factory=list)
     created_at: float
     updated_at: float
     categories: list[CategoryItem] | None = None
