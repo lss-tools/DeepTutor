@@ -11,6 +11,7 @@ import {
   repairChineseEmphasis,
   repairMalformedStrongEmphasis,
   stripArtifactAnnotations,
+  stripOgeScoreMarker,
 } from "@/lib/markdown-display";
 import {
   linkifyLocatorCitations,
@@ -47,7 +48,10 @@ function AssistantResponseImpl({
   events,
   language,
 }: AssistantResponseProps) {
-  const displayContent = useSmoothStreamText(content, isStreaming);
+  const displayContent = useSmoothStreamText(
+    stripOgeScoreMarker(content),
+    isStreaming,
+  );
   // A locator becomes interactive only when this turn's persisted reading-tool
   // events prove it belongs to the material that was open for the turn. The
   // currently open material is used only for an extra range check; it never

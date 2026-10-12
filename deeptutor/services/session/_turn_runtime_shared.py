@@ -125,13 +125,19 @@ def _assemble_persisted_answer(
     retracted_call_ids: set[str],
 ) -> str:
     """Replay visible content bytes, excluding rounds a capability retracted."""
-    return clean_thinking_tags(
+    content = clean_thinking_tags(
         "".join(
             text
             for call_id, text in content_segments
             if not (call_id and call_id in retracted_call_ids)
         )
     )
+    return re.sub(
+        r"\s*<!--\s*OGE_SCORE:[\s\S]*?(?:-->|$)\s*$",
+        "",
+        content,
+        flags=re.IGNORECASE,
+    ).rstrip()
 
 
 _FENCED_CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```")

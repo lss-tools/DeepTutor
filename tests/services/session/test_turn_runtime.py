@@ -161,6 +161,16 @@ class TestAssemblePersistedAnswer:
 
         assert _assemble_persisted_answer(segments, set()) == "Part one. Part two."
 
+    def test_persisted_answer_hides_internal_oge_score_marker(self) -> None:
+        segments = [
+            (
+                "finish-round",
+                "Answer earns full credit.\n<!--OGE_SCORE: 2 / 2; attempt=turn_123-->",
+            )
+        ]
+
+        assert _assemble_persisted_answer(segments, set()) == "Answer earns full credit."
+
     def test_commentary_rounds_are_part_of_the_persisted_answer(self) -> None:
         segments = [
             ("search-round", "Checking the syllabus first. "),

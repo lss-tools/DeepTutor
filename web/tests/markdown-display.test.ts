@@ -10,7 +10,18 @@ import {
   repairChineseEmphasis,
   repairMalformedStrongEmphasis,
   safeDecodeURIComponent,
+  stripOgeScoreMarker,
 } from "../lib/markdown-display";
+
+test("stripOgeScoreMarker hides complete and streaming grading markers", () => {
+  assert.equal(
+    stripOgeScoreMarker(
+      "Answer earns full credit.\n<!--OGE_SCORE: 2 / 2; attempt=turn_123-->",
+    ),
+    "Answer earns full credit.",
+  );
+  assert.equal(stripOgeScoreMarker("Answer.\n<!--OGE_SCORE: 2 /"), "Answer.");
+});
 
 test("repairChineseEmphasis repairs punctuation boundaries only for Chinese", () => {
   assert.equal(repairChineseEmphasis("中文*，重点*", "zh-CN"), "中文 *，重点*");

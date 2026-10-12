@@ -991,6 +991,12 @@ export function stripArtifactAnnotations(content: string): string {
     .trim();
 }
 
+export function stripOgeScoreMarker(content: string): string {
+  return content
+    .replace(/\s*<!--\s*OGE_SCORE:[\s\S]*?(?:-->|$)\s*$/i, "")
+    .trimEnd();
+}
+
 export function hasVisibleMarkdownContent(content: string): boolean {
   const normalized = normalizeMarkdownForDisplay(content);
   if (!normalized.trim()) return false;

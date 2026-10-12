@@ -49,10 +49,9 @@ class ChatCapability(TurnCapability):
                     context.user_message += self._oge_grading_instruction(
                         entry, criteria, turn_id
                     )
-        await pipeline.run(context, stream)
+        result = await pipeline.run(context, stream)
         if store and entry_id and context.session_id:
-            last_message = await store.get_last_message(context.session_id, role="assistant")
-            content = str((last_message or {}).get("content") or "")
+            content = str((result or {}).get("response") or "")
             match = _OGE_SCORE_COMMENT.search(content)
             if match and match.group(1) and match.group(2) and match.group(3) == turn_id:
                 try:
