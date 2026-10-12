@@ -20,7 +20,11 @@ from deeptutor.services.practice.answers import check_answer
 from deeptutor.services.practice.assets import MAX_ASSET_BYTES, PracticeAssetStore
 from deeptutor.services.practice.importing import MAX_ARCHIVE_BYTES, MAX_BYTES, preview
 from deeptutor.services.practice.scheduler import Rating, day_bounds
-from deeptutor.services.practice.storage import PracticeStore, ReviewConflict
+from deeptutor.services.practice.storage import (
+    IncompleteExamVariant,
+    PracticeStore,
+    ReviewConflict,
+)
 from deeptutor.services.session import get_sqlite_session_store
 
 from .question_notebook import NotebookEntryItem, _course_session_ids
@@ -85,6 +89,10 @@ class ReviewRequest(AnswerRequest):
 
 class ScoreCorrectionRequest(BaseModel):
     score: float = Field(ge=0)
+
+
+class ExamAnswerRequest(BaseModel):
+    answer: str = Field(default="", max_length=20000)
 
 
 class CommitRequest(BaseModel):
@@ -337,6 +345,74 @@ async def review(entry_id: int, payload: ReviewRequest):
         raise HTTPException(404, str(exc)) from exc
     except ReviewConflict as exc:
         raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/exam/{subject}/readiness")
+async def exam_readiness(subject: str, kim_year: int = 2027):
+    try:
+        return await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).exam_readiness,
+            subject,
+            kim_year,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/exam/{subject}/attempts", status_code=201)
+async def create_exam_attempt(subject: str, kim_year: int = 2027):
+    try:
+        return await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).create_exam_attempt,
+            subject,
+            kim_year,
+        )
+    except IncompleteExamVariant as exc:
+        raise HTTPException(
+            409,
+            {"message": str(exc), "missing_positions": exc.missing_positions},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/exam/attempts/{attempt_id}")
+async def get_exam_attempt(attempt_id: str):
+    result = await asyncio.to_thread(
+        PracticeStore(get_sqlite_session_store().db_path).get_exam_attempt,
+        attempt_id,
+    )
+    if result is None:
+        raise HTTPException(404, "Exam attempt not found")
+    return result
+
+
+@router.put("/exam/attempts/{attempt_id}/positions/{position}")
+async def answer_exam_position(attempt_id: str, position: str, payload: ExamAnswerRequest):
+    try:
+        return await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).answer_exam_position,
+            attempt_id,
+            position,
+            payload.answer,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/exam/attempts/{attempt_id}/complete")
+async def complete_exam_attempt(attempt_id: str):
+    try:
+        return await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).complete_exam_attempt,
+            attempt_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

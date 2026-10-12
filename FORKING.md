@@ -80,6 +80,24 @@ fr и pl там тоже нет.
 - Визуальная приёмка ученика остаётся ручным шагом владельца; новая схема и API
   не заменяют её.
 
+## Полные попытки ОГЭ (задача 1176)
+
+- `practice_exam_attempts` хранит статус и итог попытки; `practice_exam_items`
+  хранит позицию, балл и снимок задания. Снимок не зависит от дальнейших правок
+  банка. Эталон и объяснение API отдаёт только после завершения попытки.
+- API под `/api/question-notebook/practice/exam/` проверяет готовность банка,
+  создаёт вариант по всем позициям предмета, сохраняет ответы, завершает попытку
+  и возвращает её результат. Экран доступен по `/learning/practice/exam`.
+- Вариант использует только видимые карточки нужного года с подтверждённым
+  эталоном, режимом `auto`, ответом, объяснением и максимальным баллом. Если
+  хотя бы одной позиции не хватает, создание отклоняется с её номером. Неполный
+  вариант не выдаётся за полный.
+- Нулевые результаты при завершении попытки попадают в очередь повторения.
+  Итог содержит первичную сумму; перевод в отметку ждёт шкалы задачи 1175.
+  Число позиций сейчас основано на КИМ-2026 и требует сверки с финальными КИМ-2027.
+- Проверка: `.venv\Scripts\python.exe -m pytest tests/api/test_practice_exam.py tests/api/test_practice.py`;
+  фронтенд — `npm run typecheck` и `npm run i18n:check`.
+
 ## Запуск форка (развёртывание 10.10.2026)
 
 Форк живёт в `D:\Project\deeptutor-fork` и занимает обычные адреса
@@ -168,7 +186,7 @@ node scripts/i18n_audit.mjs      # все локали strict, включая ru
 npm run test:node                # ~1300 тестов, включая language-preferences
 cd ..
 py -3.12 -m pytest tests/i18n    # пер-локальные suites, включая русский
-D:\Project\deeptutor-fork\.venv\Scripts\python.exe -m pytest tests/api/test_practice.py tests/api/test_practice_assets.py
+D:\Project\deeptutor-fork\.venv\Scripts\python.exe -m pytest tests/api/test_practice.py tests/api/test_practice_assets.py tests/api/test_practice_exam.py
 ```
 
 Затем руками: поднять сервер, выбрать «Русский» в настройках, пройти экраны

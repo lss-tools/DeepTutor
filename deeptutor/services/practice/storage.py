@@ -14,13 +14,24 @@ from .scheduler import DAY, Rating, day_bounds, schedule
 
 # Legacy correct or manually mastered questions start with a three-day interval.
 # Once reviewed, the saved adaptive schedule is authoritative.
-_DUE_AT_SQL = """(CASE WHEN (n.resolved=1 OR n.is_correct=1)
-    AND COALESCE(r.review_count, 0)=0 THEN n.updated_at + 259200
+_DUE_AT_SQL = """(CASE WHEN n.resolved=1 THEN n.updated_at + 259200
+    WHEN r.entry_id IS NULL AND n.is_correct=1 THEN n.updated_at + 259200
     ELSE COALESCE(r.due_at, n.created_at) END)"""
 
 
 class ReviewConflict(ValueError):
     """A different tab or source changed this question since it was opened."""
+
+
+class IncompleteExamVariant(ValueError):
+    """The verified bank does not contain every position for a full variant."""
+
+    def __init__(self, missing_positions: list[str]):
+        self.missing_positions = missing_positions
+        super().__init__("Verified questions are missing for one or more exam positions")
+
+
+_EXAM_POSITION_COUNTS = {"math": 25, "russian": 13, "physics": 22, "informatics": 16}
 
 
 def initialize_practice(conn: sqlite3.Connection) -> None:
@@ -80,6 +91,33 @@ def initialize_practice(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_practice_criteria_entry
             ON practice_question_criteria(entry_id, score);
+        CREATE TABLE IF NOT EXISTS practice_exam_attempts (
+            attempt_id TEXT PRIMARY KEY,
+            exam_subject TEXT NOT NULL,
+            kim_year INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('in_progress', 'completed')),
+            total_score REAL,
+            maximum_score REAL NOT NULL,
+            grade INTEGER,
+            grade_status TEXT NOT NULL DEFAULT 'unpublished',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            completed_at REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_practice_exam_attempts_recent
+            ON practice_exam_attempts(created_at DESC);
+        CREATE TABLE IF NOT EXISTS practice_exam_items (
+            attempt_id TEXT NOT NULL REFERENCES practice_exam_attempts(attempt_id) ON DELETE CASCADE,
+            position TEXT NOT NULL,
+            entry_id INTEGER NOT NULL,
+            question_snapshot TEXT NOT NULL,
+            max_score REAL NOT NULL,
+            answer TEXT,
+            earned_score REAL,
+            answered_at REAL,
+            PRIMARY KEY(attempt_id, position),
+            UNIQUE(attempt_id, entry_id)
+        );
         CREATE TABLE IF NOT EXISTS practice_imports (
             token TEXT PRIMARY KEY,
             filename TEXT NOT NULL,
@@ -494,6 +532,213 @@ class PracticeStore:
                 (entry_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    @staticmethod
+    def _exam_positions(subject: str) -> list[str]:
+        count = _EXAM_POSITION_COUNTS.get(subject)
+        if count is None:
+            raise ValueError("Unsupported OGE subject")
+        return [str(position) for position in range(1, count + 1)]
+
+    def exam_readiness(self, subject: str, kim_year: int = 2027) -> dict:
+        positions = self._exam_positions(subject)
+        with self.connect() as conn:
+            rows = conn.execute(
+                """SELECT kim_position, COUNT(*) AS candidates FROM notebook_entries
+                WHERE exam_subject=? AND kim_year=? AND reference_status IN ('verified','confirmed')
+                  AND checking_mode='auto' AND TRIM(COALESCE(correct_answer,''))!=''
+                  AND max_score>0 AND TRIM(question)!='' AND TRIM(COALESCE(explanation,''))!=''
+                  AND (session_id IS NULL OR EXISTS(
+                      SELECT 1 FROM sessions s WHERE s.id=notebook_entries.session_id
+                        AND s.deleted_at IS NULL))
+                GROUP BY kim_position""",
+                (subject, str(kim_year)),
+            ).fetchall()
+        counts = {str(row["kim_position"]): int(row["candidates"]) for row in rows}
+        missing = [position for position in positions if counts.get(position, 0) == 0]
+        return {
+            "exam_subject": subject,
+            "kim_year": kim_year,
+            "positions": positions,
+            "available_positions": [position for position in positions if counts.get(position, 0)],
+            "missing_positions": missing,
+            "ready": not missing,
+            "candidate_counts": {position: counts.get(position, 0) for position in positions},
+            "source_policy": "verified reference and automatic grading only",
+        }
+
+    @staticmethod
+    def _exam_attempt_payload(conn: sqlite3.Connection, attempt_id: str) -> dict | None:
+        attempt = conn.execute(
+            "SELECT * FROM practice_exam_attempts WHERE attempt_id=?", (attempt_id,)
+        ).fetchone()
+        if attempt is None:
+            return None
+        items = conn.execute(
+            "SELECT * FROM practice_exam_items WHERE attempt_id=? ORDER BY CAST(position AS INTEGER)",
+            (attempt_id,),
+        ).fetchall()
+        completed = attempt["status"] == "completed"
+        result_items = []
+        for row in items:
+            snapshot = json.loads(row["question_snapshot"])
+            options = json.loads(snapshot.get("options_json") or "{}")
+            question = {
+                "id": snapshot["id"],
+                "question": snapshot["question"],
+                "question_type": snapshot["question_type"],
+                "options": options,
+            }
+            if completed:
+                question["correct_answer"] = snapshot["correct_answer"]
+                question["explanation"] = snapshot["explanation"]
+            result_items.append({
+                "position": row["position"],
+                "entry_id": row["entry_id"],
+                "question": question,
+                "max_score": row["max_score"],
+                "answer": row["answer"],
+                "earned_score": row["earned_score"],
+                "answered": row["answered_at"] is not None,
+            })
+        return {
+            **dict(attempt),
+            "items": result_items,
+            "scale_message": "Шкала не опубликована" if attempt["grade_status"] == "unpublished" else "",
+        }
+
+    def create_exam_attempt(self, subject: str, kim_year: int = 2027, now: float | None = None) -> dict:
+        now = time.time() if now is None else now
+        positions = self._exam_positions(subject)
+        readiness = self.exam_readiness(subject, kim_year)
+        if readiness["missing_positions"]:
+            raise IncompleteExamVariant(readiness["missing_positions"])
+        attempt_id = uuid.uuid4().hex
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            selected = []
+            for position in positions:
+                row = conn.execute(
+                    """SELECT n.* FROM notebook_entries n
+                    WHERE n.exam_subject=? AND n.kim_year=? AND n.kim_position=?
+                      AND n.reference_status IN ('verified','confirmed') AND n.checking_mode='auto'
+                      AND TRIM(COALESCE(n.correct_answer,''))!='' AND n.max_score>0
+                      AND TRIM(n.question)!='' AND TRIM(COALESCE(n.explanation,''))!=''
+                      AND (n.session_id IS NULL OR EXISTS(
+                          SELECT 1 FROM sessions s WHERE s.id=n.session_id
+                            AND s.deleted_at IS NULL))
+                    ORDER BY RANDOM() LIMIT 1""",
+                    (subject, str(kim_year), position),
+                ).fetchone()
+                if row is None:
+                    raise IncompleteExamVariant([position])
+                selected.append(row)
+            maximum = sum(float(row["max_score"]) for row in selected)
+            conn.execute(
+                """INSERT INTO practice_exam_attempts(
+                    attempt_id, exam_subject, kim_year, status, maximum_score, grade_status,
+                    created_at, updated_at) VALUES(?, ?, ?, 'in_progress', ?, 'unpublished', ?, ?)""",
+                (attempt_id, subject, kim_year, maximum, now, now),
+            )
+            conn.executemany(
+                """INSERT INTO practice_exam_items(
+                    attempt_id, position, entry_id, question_snapshot, max_score)
+                    VALUES(?, ?, ?, ?, ?)""",
+                [
+                    (attempt_id, row["kim_position"], row["id"], json.dumps(dict(row), ensure_ascii=False), float(row["max_score"]))
+                    for row in selected
+                ],
+            )
+            return self._exam_attempt_payload(conn, attempt_id)
+
+    def get_exam_attempt(self, attempt_id: str) -> dict | None:
+        with self.connect() as conn:
+            return self._exam_attempt_payload(conn, attempt_id)
+
+    def answer_exam_position(
+        self, attempt_id: str, position: str, answer: str, now: float | None = None
+    ) -> dict:
+        now = time.time() if now is None else now
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            attempt = conn.execute(
+                "SELECT status FROM practice_exam_attempts WHERE attempt_id=?", (attempt_id,)
+            ).fetchone()
+            if attempt is None:
+                raise LookupError("Exam attempt not found")
+            if attempt["status"] != "in_progress":
+                raise ValueError("The exam attempt is already completed")
+            row = conn.execute(
+                "SELECT * FROM practice_exam_items WHERE attempt_id=? AND position=?",
+                (attempt_id, str(position)),
+            ).fetchone()
+            if row is None:
+                raise LookupError("Exam position not found")
+            snapshot = json.loads(row["question_snapshot"])
+            from .answers import check_answer
+
+            correct = check_answer(snapshot, answer)
+            if correct is None:
+                raise ValueError("This question cannot be checked automatically")
+            earned = float(row["max_score"]) if correct else 0.0
+            conn.execute(
+                """UPDATE practice_exam_items SET answer=?, earned_score=?, answered_at=?
+                WHERE attempt_id=? AND position=?""",
+                (answer, earned, now, attempt_id, str(position)),
+            )
+            conn.execute(
+                "UPDATE practice_exam_attempts SET updated_at=? WHERE attempt_id=?",
+                (now, attempt_id),
+            )
+            return self._exam_attempt_payload(conn, attempt_id)
+
+    def complete_exam_attempt(self, attempt_id: str, now: float | None = None) -> dict:
+        now = time.time() if now is None else now
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            attempt = conn.execute(
+                "SELECT * FROM practice_exam_attempts WHERE attempt_id=?", (attempt_id,)
+            ).fetchone()
+            if attempt is None:
+                raise LookupError("Exam attempt not found")
+            if attempt["status"] == "completed":
+                return self._exam_attempt_payload(conn, attempt_id)
+            items = conn.execute(
+                "SELECT earned_score, answered_at FROM practice_exam_items WHERE attempt_id=?",
+                (attempt_id,),
+            ).fetchall()
+            if any(item["answered_at"] is None for item in items):
+                raise ValueError("Answer every position before completing the exam")
+            total = sum(float(item["earned_score"]) for item in items)
+            wrong_items = conn.execute(
+                """SELECT i.entry_id FROM practice_exam_items i
+                JOIN notebook_entries n ON n.id=i.entry_id
+                WHERE i.attempt_id=? AND i.earned_score<i.max_score""",
+                (attempt_id,),
+            ).fetchall()
+            for item in wrong_items:
+                conn.execute(
+                    "UPDATE notebook_entries SET resolved=0 WHERE id=?",
+                    (item["entry_id"],),
+                )
+                conn.execute(
+                    """INSERT INTO practice_review_state(entry_id, is_mistake, first_wrong_at,
+                        due_at, interval_days, ease, streak, lapses, review_count, version)
+                    VALUES(?, 1, ?, ?, 1, 2.5, 0, 1, 0, 0)
+                    ON CONFLICT(entry_id) DO UPDATE SET is_mistake=1,
+                        first_wrong_at=CASE WHEN practice_review_state.is_mistake=0 THEN excluded.first_wrong_at
+                                            ELSE practice_review_state.first_wrong_at END,
+                        due_at=MIN(practice_review_state.due_at, excluded.due_at),
+                        interval_days=1, streak=0, lapses=practice_review_state.lapses+1,
+                        version=practice_review_state.version+1""",
+                    (item["entry_id"], now, now),
+                )
+            conn.execute(
+                """UPDATE practice_exam_attempts SET status='completed', total_score=?,
+                    updated_at=?, completed_at=? WHERE attempt_id=?""",
+                (total, now, now, attempt_id),
+            )
+            return self._exam_attempt_payload(conn, attempt_id)
 
     def stage_import(
         self, filename: str, target: str, questions: list[dict], course_id: str = ""

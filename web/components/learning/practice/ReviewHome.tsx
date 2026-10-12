@@ -202,6 +202,18 @@ export function ReviewHome() {
               ))}
             </div>
           </section>
+          <Link
+            href="/learning/practice/exam"
+            className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-card px-5 py-4 hover:bg-muted/40"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Полный вариант ОГЭ</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Пройти задания по порядку и сохранить итоговый первичный балл.
+              </span>
+            </span>
+            <ArrowRight size={17} />
+          </Link>
           <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
             <p>{t('Recall first, then check. Forgotten questions come back in this round.')}</p>
             <Link

@@ -38,6 +38,44 @@ export interface PracticeAnalytics {
   sources: (PracticeCounts & { source: string })[]
   totals: PracticeCounts
 }
+export interface ExamReadiness {
+  exam_subject: string
+  kim_year: number
+  positions: string[]
+  available_positions: string[]
+  missing_positions: string[]
+  ready: boolean
+  candidate_counts: Record<string, number>
+  source_policy: string
+}
+export interface ExamItem {
+  position: string
+  entry_id: number
+  question: {
+    id: number
+    question: string
+    question_type: string
+    options: Record<string, string>
+    correct_answer?: string
+    explanation?: string
+  }
+  max_score: number
+  answer: string | null
+  earned_score: number | null
+  answered: boolean
+}
+export interface ExamAttempt {
+  attempt_id: string
+  exam_subject: string
+  kim_year: number
+  status: 'in_progress' | 'completed'
+  total_score: number | null
+  maximum_score: number
+  grade: number | null
+  grade_status: string
+  scale_message: string
+  items: ExamItem[]
+}
 export const getPracticeAnalytics = (courseId = '', days = 30, workspaceId?: string) =>
   request<PracticeAnalytics>(
     `/analytics?${params(courseId)}&days=${days}&all_workspaces=${workspaceId === '*'}`,
@@ -66,10 +104,13 @@ async function request<T>(path: string, init?: RequestInit, workspaceId?: string
   )
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
-    throw new PracticeRequestError(
-      typeof body.detail === 'string' ? body.detail : `Request failed: ${response.status}`,
-      response.status
-    )
+    const detail = body.detail
+    const message = typeof detail === 'string'
+      ? detail
+      : typeof detail?.message === 'string'
+        ? detail.message
+        : `Request failed: ${response.status}`
+    throw new PracticeRequestError(message, response.status)
   }
   return response.json() as Promise<T>
 }
@@ -95,6 +136,22 @@ export const getPracticeQueue = (courseId = '', workspaceId?: string) =>
     `/queue?${params(courseId)}&all_workspaces=${workspaceId === '*'}`,
     undefined,
     workspaceId === '*' ? '' : workspaceId
+  )
+export const getExamReadiness = (subject: string) =>
+  request<ExamReadiness>(`/exam/${encodeURIComponent(subject)}/readiness`)
+export const createExamAttempt = (subject: string) =>
+  request<ExamAttempt>(`/exam/${encodeURIComponent(subject)}/attempts`, { method: 'POST' })
+export const getExamAttempt = (attemptId: string) =>
+  request<ExamAttempt>(`/exam/attempts/${encodeURIComponent(attemptId)}`)
+export const answerExamPosition = (attemptId: string, position: string, answer: string) =>
+  request<ExamAttempt>(
+    `/exam/attempts/${encodeURIComponent(attemptId)}/positions/${encodeURIComponent(position)}`,
+    { ...json({ answer }), method: 'PUT' }
+  )
+export const completeExamAttempt = (attemptId: string) =>
+  request<ExamAttempt>(
+    `/exam/attempts/${encodeURIComponent(attemptId)}/complete`,
+    { method: 'POST' }
   )
 export const getPracticeQuestion = (id: number, workspaceId?: string) =>
   request<PracticeQuestion>(`/questions/${id}`, undefined, workspaceId)
