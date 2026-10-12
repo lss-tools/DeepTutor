@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useTranslation } from 'react-i18next'
-import { ArrowRight, Check, ChevronDown, FileUp, Loader2, Library } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, FileUp, Library } from 'lucide-react'
 import { useChatWorkspaces } from '@/hooks/useChatWorkspaces'
 import { activeWorkspaceId, scopedUrl } from '@/lib/workspace-scope'
 import {
@@ -181,11 +181,7 @@ export function ReviewHome() {
                 disabled={starting || !summary?.due}
                 className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-40"
               >
-                {starting ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <ArrowRight size={16} />
-                )}
+                <ArrowRight size={16} className={starting ? 'animate-pulse' : undefined} />
                 {t("Start today's review")}
               </button>
             </div>
