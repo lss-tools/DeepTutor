@@ -79,7 +79,7 @@ def main() -> None:
         )
     uvicorn.run(
         "deeptutor.api.main:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=backend_port,
         reload=dev_reload,
         workers=backend_workers,

@@ -1521,7 +1521,7 @@ def start(
     common_env["BACKEND_PORT"] = str(backend_port)
     common_env["FRONTEND_PORT"] = str(frontend_port)
     common_env["PORT"] = str(frontend_port)
-    common_env["HOSTNAME"] = "0.0.0.0"
+    common_env["HOSTNAME"] = "127.0.0.1"
     common_env["NEXT_PUBLIC_API_BASE"] = api_base
     common_env["NEXT_PUBLIC_AUTH_ENABLED"] = "true" if auth_enabled else "false"
     # The Next.js middleware (web/proxy.ts) runs in the frontend's Node runtime
@@ -1568,7 +1568,7 @@ def start(
         "uvicorn",
         "deeptutor.api.main:app",
         "--host",
-        "0.0.0.0",
+        "127.0.0.1",
         "--port",
         str(backend_port),
         "--log-level",
