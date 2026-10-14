@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import random
+import re
 import sqlite3
 import time
 import uuid
@@ -33,6 +34,67 @@ class IncompleteExamVariant(ValueError):
 
 
 _EXAM_POSITION_COUNTS = {"math": 25, "russian": 13, "physics": 22, "informatics": 16}
+
+_REFERENCE_STATUSES = {"verified", "confirmed", "unchecked"}
+_CHECKING_MODES = {"auto", "model", "manual"}
+# Where a card's KIM position comes from, as recorded by the bank pipeline.
+# Only the navigator value means a person compared the card against the
+# official FIPI position list.
+_POSITION_SOURCES = {
+    "navigator_fipi_2026",
+    "derived_fipi_navigator_2026",
+    "sdamgia_task_type",
+    "not_determined",
+}
+_PROVENANCE_RE = re.compile(
+    r"\s*;?\s*kim_position_source=[^;]*(?:;\s*kim_position_checked_by_human=[^;]*)?"
+)
+
+
+def _with_position_provenance(
+    question_source: str, position_source: str, checked_by_human: bool
+) -> str:
+    """Keep the card's own text and restate where its KIM position came from.
+
+    A confirmed card has to answer "who decided this is position 9?" by
+    itself: the bank has no column for it, and the source pipeline that knows
+    is a separate database.
+    """
+    if not position_source:
+        return question_source
+    base = _PROVENANCE_RE.sub("", question_source).strip().strip(";").strip()
+    marker = (
+        f"kim_position_source={position_source}; "
+        f"kim_position_checked_by_human={'yes' if checked_by_human else 'no'}"
+    )
+    return f"{base}; {marker}" if base else marker
+
+
+def _exam_eligibility(entry: dict, has_criteria: bool) -> tuple[bool, str]:
+    """Whether the exam variant can draw this card, and what stops it."""
+    from .answers import check_answer
+
+    if entry["reference_status"] not in {"verified", "confirmed"}:
+        return False, "The reference answer is not verified"
+    if entry["checking_mode"] not in {"auto", "model"}:
+        return False, "Manual grading stays outside the exam variant"
+    if not str(entry.get("exam_subject") or "").strip():
+        return False, "The card carries no exam subject"
+    if not str(entry.get("kim_position") or "").strip():
+        return False, "The card carries no KIM position"
+    if not entry.get("max_score") or float(entry["max_score"]) <= 0:
+        return False, "The card carries no maximum score"
+    if not str(entry.get("question") or "").strip():
+        return False, "The question text is empty"
+    if not str(entry.get("explanation") or "").strip():
+        return False, "The worked solution is empty"
+    if entry["checking_mode"] == "model" and not has_criteria:
+        return False, "Scoring criteria are missing"
+    if entry["checking_mode"] == "auto" and check_answer(
+        entry, str(entry.get("correct_answer") or "")
+    ) is not True:
+        return False, "The answer does not pass automatic checking"
+    return True, ""
 
 
 def initialize_practice(conn: sqlite3.Connection) -> None:
@@ -539,6 +601,87 @@ class PracticeStore:
                 (entry_id,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def confirm_reference(
+        self,
+        entry_id: int,
+        reference_status: str,
+        checking_mode: str,
+        position_source: str = "",
+        position_checked_by_human: bool = False,
+        now: float | None = None,
+    ) -> dict:
+        """Record a human's verdict on one card's reference answer and grading mode.
+
+        The exam variant draws verified cards only, and it silently skips a
+        verified card whose answer does not self-check or whose model grading
+        has no criteria. Such a confirmation is worse than a refusal: the
+        position keeps reading as missing while the human believes the work is
+        done. So every gate the variant applies is checked here first, against
+        the values the card is about to receive.
+        """
+        from .answers import check_answer
+
+        now = time.time() if now is None else now
+        if reference_status not in _REFERENCE_STATUSES:
+            raise ValueError("Reference status must be verified, confirmed or unchecked")
+        if checking_mode not in _CHECKING_MODES:
+            raise ValueError("Checking mode must be auto, model or manual")
+        if position_source and position_source not in _POSITION_SOURCES:
+            raise ValueError("Unknown KIM position source")
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            entry = conn.execute(
+                "SELECT * FROM notebook_entries WHERE id=?", (entry_id,)
+            ).fetchone()
+            if entry is None:
+                raise LookupError("Question not found")
+            has_criteria = bool(
+                conn.execute(
+                    "SELECT 1 FROM practice_question_criteria WHERE entry_id=? LIMIT 1",
+                    (entry_id,),
+                ).fetchone()
+            )
+            prospective = {
+                **dict(entry),
+                "reference_status": reference_status,
+                "checking_mode": checking_mode,
+            }
+            if reference_status in {"verified", "confirmed"}:
+                if not str(entry["correct_answer"] or "").strip():
+                    raise ValueError("The reference answer is empty; nothing to verify")
+                if checking_mode == "model" and not has_criteria:
+                    raise ValueError("Model grading needs scoring criteria on this question")
+                if (
+                    checking_mode == "auto"
+                    and check_answer(prospective, str(entry["correct_answer"])) is not True
+                ):
+                    raise ValueError(
+                        "Automatic checking cannot confirm this answer format; use model grading"
+                    )
+            question_source = _with_position_provenance(
+                str(entry["question_source"] or ""),
+                position_source,
+                position_checked_by_human,
+            )
+            conn.execute(
+                """UPDATE notebook_entries SET reference_status=?, checking_mode=?,
+                    question_source=?, updated_at=? WHERE id=?""",
+                (reference_status, checking_mode, question_source, now, entry_id),
+            )
+            prospective["question_source"] = question_source
+            ready, reason = _exam_eligibility(prospective, has_criteria)
+            return {
+                "entry_id": entry_id,
+                "reference_status": reference_status,
+                "checking_mode": checking_mode,
+                "question_source": question_source,
+                "exam_subject": str(entry["exam_subject"] or ""),
+                "kim_position": str(entry["kim_position"] or ""),
+                "exam_ready": ready,
+                "reason": reason,
+                "updated_at": now,
+            }
 
     @staticmethod
     def _exam_positions(subject: str) -> list[str]:

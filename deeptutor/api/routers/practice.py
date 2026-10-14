@@ -91,6 +91,19 @@ class ScoreCorrectionRequest(BaseModel):
     score: float = Field(ge=0)
 
 
+class ReferenceConfirmationRequest(BaseModel):
+    reference_status: Literal["verified", "confirmed", "unchecked"]
+    checking_mode: Literal["auto", "model", "manual"]
+    position_source: Literal[
+        "",
+        "navigator_fipi_2026",
+        "derived_fipi_navigator_2026",
+        "sdamgia_task_type",
+        "not_determined",
+    ] = ""
+    position_checked_by_human: bool = False
+
+
 class ExamAnswerRequest(BaseModel):
     answer: str = Field(default="", max_length=20000)
 
@@ -302,6 +315,27 @@ async def download_attachment(entry_id: int, digest: str):
 async def check(entry_id: int, payload: AnswerRequest):
     entry = await _entry(entry_id)
     return {"correct": check_answer(entry, payload.answer)}
+
+
+@router.post("/questions/{entry_id}/reference")
+async def confirm_reference(entry_id: int, payload: ReferenceConfirmationRequest):
+    """Let an adult account mark a card's reference answer as checked by hand."""
+    if get_current_user().role not in {"admin", "teacher"}:
+        raise HTTPException(403, "Only an adult account can verify a reference answer")
+    await _entry(entry_id)
+    try:
+        return await asyncio.to_thread(
+            PracticeStore(get_sqlite_session_store().db_path).confirm_reference,
+            entry_id,
+            payload.reference_status,
+            payload.checking_mode,
+            payload.position_source,
+            payload.position_checked_by_human,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/questions/{entry_id}/scores")
