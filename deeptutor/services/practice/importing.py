@@ -150,8 +150,8 @@ def normalize_question(raw: dict) -> dict:
     row = {str(key).strip().lower(): value for key, value in raw.items()}
     fields = {key: next((row[a] for a in names if a in row), "") for key, names in ALIASES.items()}
     question, answer = _cell(fields["question"]), _cell(fields["correct_answer"])
-    if not question or not answer:
-        raise ValueError("Question and correct answer are required")
+    if not question:
+        raise ValueError("Question is required")
     options = fields["options"] or {}
     if isinstance(options, str):
         options = json.loads(options)
@@ -272,6 +272,8 @@ def normalize_question(raw: dict) -> dict:
         metadata["max_score"] = None
         metadata["is_analogue"] = False
         criteria = []
+    if not answer and not (is_exam_question and metadata["checking_mode"] == "model" and criteria):
+        raise ValueError("Question and correct answer are required unless model grading has sourced criteria")
     result = dict(
         question=question,
         question_type=kind,

@@ -63,7 +63,7 @@ def add_math_question(
     return entry["id"]
 
 
-def test_exam_readiness_lists_missing_positions_and_rejects_partial_variant(exam_client):
+def test_exam_readiness_lists_missing_positions_and_starts_partial_variant(exam_client):
     store, client = exam_client
     add_math_question(store, 1)
 
@@ -72,8 +72,16 @@ def test_exam_readiness_lists_missing_positions_and_rejects_partial_variant(exam
     assert readiness["available_positions"] == ["1"]
     assert readiness["missing_positions"] == [str(position) for position in range(2, 26)]
     response = client.post("/practice/exam/math/attempts")
-    assert response.status_code == 409
-    assert response.json()["detail"]["missing_positions"] == readiness["missing_positions"]
+    assert response.status_code == 201
+    attempt = response.json()
+    assert attempt["is_partial"] is True
+    assert attempt["missing_positions"] == readiness["missing_positions"]
+    assert len(attempt["items"]) == 1
+    assert attempt["maximum_score"] == 1
+    # Bank changes do not rewrite the stored composition of a running attempt.
+    add_math_question(store, 2)
+    resumed = client.get(f"/practice/exam/attempts/{attempt['attempt_id']}").json()
+    assert resumed["missing_positions"] == readiness["missing_positions"]
 
 
 def test_exam_attempt_resumes_scores_and_routes_zero_score_to_review(exam_client):
@@ -197,3 +205,82 @@ def test_model_checked_position_accepts_partial_score_from_chat_event(exam_clien
     completed = client.post(f"/practice/exam/attempts/{attempt_id}/complete").json()
     assert completed["status"] == "completed"
     assert completed["total_score"] == 24.75
+
+
+def test_empty_bank_cannot_start_an_attempt(exam_client):
+    _, client = exam_client
+    assert client.post("/practice/exam/math/attempts").status_code == 409
+
+
+def test_criteria_only_card_is_confirmed_graded_and_completed_without_reference(exam_client):
+    store, client = exam_client
+    entry_id = add_math_question(store, 24, checking_mode="model", max_score=2)
+    with store._connect() as conn:
+        conn.execute("UPDATE notebook_entries SET correct_answer='', explanation='' WHERE id=?", (entry_id,))
+    confirmed = client.post(
+        f"/practice/questions/{entry_id}/reference",
+        json={"reference_status": "verified", "checking_mode": "model"},
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["exam_ready"] is True
+    assert client.get("/practice/exam/math/readiness").json()["available_positions"] == ["24"]
+    created = client.post("/practice/exam/math/attempts").json()
+    attempt_id = created["attempt_id"]
+    assert created["items"][0]["question"]["reference_basis"] == "criteria_only"
+    assert "correct_answer" not in created["items"][0]["question"]
+    saved = client.put(f"/practice/exam/attempts/{attempt_id}/positions/24", json={"answer": "A proof"})
+    assert saved.status_code == 200
+    score = PracticeStore(store.db_path).record_model_score(entry_id, "criteria_only_grade", 1, 2, "chat-session")
+    graded = client.post(
+        f"/practice/exam/attempts/{attempt_id}/positions/24/model-score",
+        json={"grading_attempt_id": score["attempt_id"]},
+    )
+    assert graded.status_code == 200
+    completed = client.post(f"/practice/exam/attempts/{attempt_id}/complete").json()
+    assert completed["total_score"] == 1 and completed["maximum_score"] == 2
+    assert completed["is_partial"] is True and "25" in completed["missing_positions"]
+    assert completed["items"][0]["question"]["explanation"] == ""
+
+
+def test_criteria_only_card_without_criteria_is_not_admitted(exam_client):
+    store, client = exam_client
+    entry_id = add_math_question(store, 25, checking_mode="model", max_score=2)
+    with store._connect() as conn:
+        conn.execute("UPDATE notebook_entries SET correct_answer='', explanation='' WHERE id=?", (entry_id,))
+        conn.execute("DELETE FROM practice_question_criteria WHERE entry_id=?", (entry_id,))
+    response = client.post(
+        f"/practice/questions/{entry_id}/reference",
+        json={"reference_status": "verified", "checking_mode": "model"},
+    )
+    assert response.status_code == 422
+    assert client.get("/practice/exam/math/readiness").json()["available_positions"] == []
+
+
+def test_exam_snapshot_carries_question_attachments_without_revealing_solution(exam_client):
+    import json
+    store, client = exam_client
+    entry_id = add_math_question(store, 11)
+    attachment = {"kind": "image", "name": "graph.svg", "sha256": "a" * 64,
+                  "path": "practice/attachments/graph.svg", "mime": "image/svg+xml", "bytes": 10}
+    with store._connect() as conn:
+        conn.execute("UPDATE notebook_entries SET attachments_json=? WHERE id=?", (json.dumps([attachment]), entry_id))
+    created = client.post("/practice/exam/math/attempts").json()
+    question = created["items"][0]["question"]
+    assert question["attachments"] == [attachment]
+    assert "correct_answer" not in question and "explanation" not in question
+
+
+def test_import_accepts_criteria_only_model_card_and_rejects_auto_without_answer():
+    from deeptutor.services.practice.importing import normalize_question
+    raw = {
+        "question": "Prove the statement", "correct_answer": "", "explanation": "",
+        "exam_subject": "math", "kim_year": "2027", "kim_position": "24", "kim_part": "2",
+        "answer_format": "proof", "max_score": "2", "checking_mode": "model",
+        "question_source": "sdamgia:123", "is_analogue": "true", "reference_status": "unchecked",
+        "criteria": [{"score": 2, "text": "A complete proof", "source": "FIPI", "scope": "position24"}],
+    }
+    assert normalize_question(raw)["correct_answer"] == ""
+    with pytest.raises(ValueError, match="correct answer"):
+        normalize_question({**raw, "checking_mode": "auto"})
+    with pytest.raises(ValueError, match="criteria"):
+        normalize_question({**raw, "criteria": []})

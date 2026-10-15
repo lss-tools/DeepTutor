@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import Markdown from '@/components/common/MarkdownRenderer'
+import PracticeAttachments from '@/components/learning/practice/PracticeAttachments'
+import { practiceAssetMarkdown } from '@/lib/practice-content'
 import { LearningErrorState, LearningShell } from '@/components/learning/LearningShell'
 import {
   answerExamPosition,
@@ -115,7 +117,7 @@ export function ExamAttemptPage() {
   }
 
   return (
-    <LearningShell title="Полный вариант ОГЭ" subtitle="Попытка сохраняется по мере ответов.">
+    <LearningShell title="Вариант ОГЭ" subtitle="Попытка сохраняется по мере ответов.">
       <div className="mb-6 flex flex-wrap gap-2">
         {SUBJECTS.map(([value, label]) => (
           <button
@@ -133,6 +135,14 @@ export function ExamAttemptPage() {
 
       {error && <LearningErrorState message={error} onRetry={() => setRefresh(value => value + 1)} />}
 
+      {attempt?.is_partial && (
+        <section role="status" className="mb-5 rounded-xl border border-border bg-card p-4 text-sm">
+          <p className="font-medium">Неполный вариант ОГЭ</p>
+          <p>Недостающие позиции: {attempt.missing_positions.join(', ')}.</p>
+          <p>Баллы считаются только за включённые задания.</p>
+        </section>
+      )}
+
       {!attempt && !resuming && readiness && (
         <section className="rounded-2xl border border-border bg-card p-5">
           <h2 className="font-semibold">
@@ -147,11 +157,11 @@ export function ExamAttemptPage() {
           )}
           <button
             type="button"
-            disabled={!readiness.ready || busy}
+            disabled={readiness.available_positions.length === 0 || busy}
             onClick={() => void start()}
             className="mt-5 rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground disabled:opacity-50"
           >
-            {busy ? 'Создаю…' : 'Начать вариант'}
+            {busy ? 'Создаю…' : readiness.ready ? 'Начать вариант' : 'Начать неполный вариант'}
           </button>
         </section>
       )}
@@ -159,7 +169,7 @@ export function ExamAttemptPage() {
       {attempt && attempt.status === 'in_progress' && attempt.items.some(item => !item.answered) && activeItem && (
         <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
           <div className="mb-5 flex items-center justify-between text-sm text-muted-foreground">
-            <span>Позиция {activeItem.position} из {attempt.items.length}</span>
+            <span>Позиция КИМ {activeItem.position} · заданий в попытке: {attempt.items.length}</span>
             <span>{attempt.items.filter(item => item.answered).length} ответов сохранено</span>
           </div>
           <progress
@@ -169,8 +179,9 @@ export function ExamAttemptPage() {
             aria-label="Ход выполнения варианта"
           />
           <div className="prose prose-sm max-w-none dark:prose-invert">
-            <Markdown content={activeItem.question.question} />
+            <Markdown content={practiceAssetMarkdown(activeItem.question.question, activeItem.question)} />
           </div>
+          <PracticeAttachments entry={activeItem.question} inlineContent={activeItem.question.question} />
           {Object.keys(activeItem.question.options).length > 0 ? (
             <fieldset className="mt-6 space-y-3">
               <legend className="mb-3 text-sm font-medium">Выберите ответ</legend>
@@ -201,11 +212,20 @@ export function ExamAttemptPage() {
           ) : (
             <label className="mt-6 block text-sm font-medium">
               Ответ
-              <input
-                value={answer}
-                onChange={event => setAnswer(event.target.value)}
-                className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3"
-              />
+              {activeItem.question.checking_mode === 'model' ? (
+                <textarea
+                  value={answer}
+                  onChange={event => setAnswer(event.target.value)}
+                  rows={6}
+                  className="mt-2 w-full rounded-xl border border-border bg-background p-3"
+                />
+              ) : (
+                <input
+                  value={answer}
+                  onChange={event => setAnswer(event.target.value)}
+                  className="mt-2 h-11 w-full rounded-xl border border-border bg-background px-3"
+                />
+              )}
             </label>
           )}
           <div className="mt-6 flex flex-wrap gap-3">

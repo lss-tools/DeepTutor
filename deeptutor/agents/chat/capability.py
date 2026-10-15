@@ -84,16 +84,25 @@ class ChatCapability(TurnCapability):
             f"- {item['score']}: {item['text']} (source: {item['source']}; scope: {item['scope']})"
             for item in criteria
         ) or "(none)"
+        criteria_only = not str(entry.get("correct_answer") or "").strip() and bool(criteria)
+        grading_basis = (
+            "This verified question is graded by its sourced criteria without a reference answer. "
+            "Independently solve the exact question and evaluate the student's reasoning against "
+            "those criteria. State that the score is criteria-based without a reference solution. "
+            "If you cannot justify the proof or calculation, request manual review. "
+            if criteria_only and entry.get("reference_status") in {"verified", "confirmed"}
+            else "Use this exact question, its verified reference, and these criteria. If the reference "
+                 "is missing, unverified, or belongs to another question, request manual review. "
+        )
         return (
             "\n\n[Official OGE grading context for the single selected question]\n"
             f"Question: {entry['question']}\nReference answer: {entry['correct_answer'] or '(none)'}\n"
             f"Reference status: {entry.get('reference_status') or '(none)'}\n"
             f"Maximum score: {maximum:g}\nCriteria:\n{criteria_lines}\n"
-            "If the user explicitly asks you to grade a solution, use only this exact "
-            "question, its verified reference, and these criteria. If the reference is "
-            "missing, unverified, or belongs to another question, do not grade from general "
-            "knowledge. Explain that manual review is needed and end with "
-            "<!--OGE_SCORE: manual_review--> . Otherwise give a score within the maximum "
+            "If the user explicitly asks you to grade a solution: "
+            f"{grading_basis}"
+            "When manual review is needed, end with <!--OGE_SCORE: manual_review--> . "
+            "Otherwise give a score within the maximum "
             f"and end with <!--OGE_SCORE: score / {maximum:g}; attempt={turn_id}--> . "
             "Do not emit either "
             "marker when the user did not ask for grading.\n"

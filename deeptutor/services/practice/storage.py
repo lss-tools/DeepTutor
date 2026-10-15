@@ -86,7 +86,7 @@ def _exam_eligibility(entry: dict, has_criteria: bool) -> tuple[bool, str]:
         return False, "The card carries no maximum score"
     if not str(entry.get("question") or "").strip():
         return False, "The question text is empty"
-    if not str(entry.get("explanation") or "").strip():
+    if entry["checking_mode"] != "model" and not str(entry.get("explanation") or "").strip():
         return False, "The worked solution is empty"
     if entry["checking_mode"] == "model" and not has_criteria:
         return False, "Scoring criteria are missing"
@@ -225,6 +225,11 @@ def initialize_practice(conn: sqlite3.Connection) -> None:
     }
     if "grading_attempt_id" not in exam_item_columns:
         conn.execute("ALTER TABLE practice_exam_items ADD COLUMN grading_attempt_id TEXT")
+    exam_attempt_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(practice_exam_attempts)")
+    }
+    if "missing_positions_json" not in exam_attempt_columns:
+        conn.execute("ALTER TABLE practice_exam_attempts ADD COLUMN missing_positions_json TEXT NOT NULL DEFAULT '[]'")
     if not existing:
         # Additive migration: original IDs, answers, timestamps and categories stay intact.
         conn.execute("""
@@ -515,8 +520,6 @@ class PracticeStore:
                 raise ValueError("This question is not configured for model grading")
             if entry["reference_status"] not in {"verified", "confirmed"}:
                 raise ValueError("The reference answer needs manual verification")
-            if not str(entry["correct_answer"] or "").strip():
-                raise ValueError("The reference answer is missing; send this question for manual review")
             if entry["max_score"] is None or float(entry["max_score"]) != float(max_score):
                 raise ValueError("The attempt maximum does not match the question")
             if not conn.execute(
@@ -648,7 +651,7 @@ class PracticeStore:
                 "checking_mode": checking_mode,
             }
             if reference_status in {"verified", "confirmed"}:
-                if not str(entry["correct_answer"] or "").strip():
+                if checking_mode != "model" and not str(entry["correct_answer"] or "").strip():
                     raise ValueError("The reference answer is empty; nothing to verify")
                 if checking_mode == "model" and not has_criteria:
                     raise ValueError("Model grading needs scoring criteria on this question")
@@ -699,8 +702,9 @@ class PracticeStore:
                   AND (checking_mode='auto' OR (checking_mode='model' AND EXISTS(
                       SELECT 1 FROM practice_question_criteria c
                       WHERE c.entry_id=notebook_entries.id)))
-                  AND TRIM(COALESCE(correct_answer,''))!=''
-                  AND max_score>0 AND TRIM(question)!='' AND TRIM(COALESCE(explanation,''))!=''
+                  AND (checking_mode='model' OR (TRIM(COALESCE(correct_answer,''))!=''
+                      AND TRIM(COALESCE(explanation,''))!=''))
+                  AND max_score>0 AND TRIM(question)!=''
                   AND (session_id IS NULL OR EXISTS(
                       SELECT 1 FROM sessions s WHERE s.id=notebook_entries.session_id
                         AND s.deleted_at IS NULL))
@@ -750,7 +754,9 @@ class PracticeStore:
                 "question": snapshot["question"],
                 "question_type": snapshot["question_type"],
                 "options": options,
+                "attachments": json.loads(snapshot.get("attachments_json") or "[]"),
                 "checking_mode": snapshot.get("checking_mode", ""),
+                "reference_basis": "criteria_only" if not str(snapshot.get("correct_answer") or "").strip() else "reference_answer",
             }
             if snapshot.get("checking_mode") == "model":
                 question["criteria"] = snapshot.get("criteria", [])
@@ -769,6 +775,8 @@ class PracticeStore:
         return {
             **dict(attempt),
             "items": result_items,
+            "missing_positions": json.loads(attempt["missing_positions_json"]),
+            "is_partial": bool(json.loads(attempt["missing_positions_json"])),
             "scale_message": "Шкала не опубликована" if attempt["grade_status"] == "unpublished" else "",
         }
 
@@ -776,7 +784,7 @@ class PracticeStore:
         now = time.time() if now is None else now
         positions = self._exam_positions(subject)
         readiness = self.exam_readiness(subject, kim_year)
-        if readiness["missing_positions"]:
+        if not readiness["available_positions"]:
             raise IncompleteExamVariant(readiness["missing_positions"])
         attempt_id = uuid.uuid4().hex
         with self.connect() as conn:
@@ -788,8 +796,9 @@ class PracticeStore:
                     WHERE n.exam_subject=? AND n.kim_year=? AND n.kim_position=?
                       AND n.reference_status IN ('verified','confirmed')
                       AND n.checking_mode IN ('auto','model')
-                      AND TRIM(COALESCE(n.correct_answer,''))!='' AND n.max_score>0
-                      AND TRIM(n.question)!='' AND TRIM(COALESCE(n.explanation,''))!=''
+                      AND (n.checking_mode='model' OR (TRIM(COALESCE(n.correct_answer,''))!=''
+                          AND TRIM(COALESCE(n.explanation,''))!=''))
+                      AND n.max_score>0 AND TRIM(n.question)!=''
                       AND (n.session_id IS NULL OR EXISTS(
                           SELECT 1 FROM sessions s WHERE s.id=n.session_id
                             AND s.deleted_at IS NULL))
@@ -805,15 +814,18 @@ class PracticeStore:
                     if row["checking_mode"] == "model"
                     or check_answer(dict(row), str(row["correct_answer"])) is True
                 ]
-                if not candidates:
-                    raise IncompleteExamVariant([position])
-                selected.append(random.choice(candidates))
+                if candidates:
+                    selected.append(random.choice(candidates))
+            if not selected:
+                raise IncompleteExamVariant(positions)
+            selected_positions = {str(row["kim_position"]) for row in selected}
+            missing_positions = [position for position in positions if position not in selected_positions]
             maximum = sum(float(row["max_score"]) for row in selected)
             conn.execute(
                 """INSERT INTO practice_exam_attempts(
                     attempt_id, exam_subject, kim_year, status, maximum_score, grade_status,
-                    created_at, updated_at) VALUES(?, ?, ?, 'in_progress', ?, 'unpublished', ?, ?)""",
-                (attempt_id, subject, kim_year, maximum, now, now),
+                    created_at, updated_at, missing_positions_json) VALUES(?, ?, ?, 'in_progress', ?, 'unpublished', ?, ?, ?)""",
+                (attempt_id, subject, kim_year, maximum, now, now, json.dumps(missing_positions)),
             )
             item_values = []
             for row in selected:

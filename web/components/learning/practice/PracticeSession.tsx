@@ -2,7 +2,7 @@
 
 import Markdown from '@/components/common/MarkdownRenderer'
 import PracticeAttachments from '@/components/learning/practice/PracticeAttachments'
-import { practiceMarkdown } from '@/lib/practice-content'
+import { practiceAssetMarkdown, practiceMarkdown } from '@/lib/practice-content'
 import { randomUuid } from '@/lib/random-uuid'
 import { WorkspaceLabel } from '../LibraryWorkspace'
 import { useEffect, useRef, useState } from 'react'
@@ -296,12 +296,12 @@ function PracticeTurn({
           </div>
           <div className="text-base leading-relaxed">
             <Markdown
-              content={practiceMarkdown(entry.question)}
+              content={practiceMarkdown(practiceAssetMarkdown(entry.question, entry, workspaceId))}
               allowHtml={false}
               className="[overflow-wrap:anywhere] [&_pre]:max-w-full [&_pre]:overflow-x-auto"
             />
           </div>
-          <PracticeAttachments entry={entry} workspaceId={workspaceId} />
+          <PracticeAttachments entry={entry} workspaceId={workspaceId} inlineContent={entry.question} />
           {multi && (
             <p className="mt-3 text-xs text-muted-foreground">{t('Select all correct answers')}</p>
           )}

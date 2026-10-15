@@ -93,3 +93,14 @@ def test_chat_records_grade_from_current_pipeline_result(monkeypatch, tmp_path):
     asyncio.run(ChatCapability().run(context, StreamBus()))
 
     assert calls == [(17, turn_id, 2.0, 2.0, session_id)]
+
+
+def test_verified_criteria_only_grading_uses_criteria_without_demanding_a_reference():
+    entry = {"question": "Prove it", "correct_answer": "", "reference_status": "verified", "max_score": 2}
+    criteria = [{"score": 2, "text": "A justified proof", "source": "FIPI", "scope": "24"}]
+    instruction = ChatCapability._oge_grading_instruction(entry, criteria, "turn_criteria")
+    assert "graded by its sourced criteria without a reference answer" in instruction
+    assert "Independently solve" in instruction
+    unverified = ChatCapability._oge_grading_instruction({**entry, "reference_status": "unchecked"}, criteria, "turn_unverified")
+    assert "graded by its sourced criteria without a reference answer" not in unverified
+    assert "request manual review" in unverified

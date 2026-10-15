@@ -8,9 +8,11 @@ import type { NotebookEntry } from "@/lib/notebook-api";
 export default function PracticeAttachments({
   entry,
   workspaceId,
+  inlineContent,
 }: {
-  entry: NotebookEntry;
+  entry: Pick<NotebookEntry, "id" | "attachments">;
   workspaceId?: string;
+  inlineContent?: string;
 }) {
   const { t } = useTranslation();
   if (!entry.attachments?.length) return null;
@@ -21,7 +23,7 @@ export default function PracticeAttachments({
         const url = apiUrl(scopedUrl(path, workspaceId));
         return (
           <div key={attachment.sha256} className="space-y-2">
-            {attachment.kind === "image" && (
+            {attachment.kind === "image" && !inlineContent?.includes(`practice-asset:${attachment.name}`) && (
               // User files are served by the authenticated practice endpoint.
               // eslint-disable-next-line @next/next/no-img-element
               <img src={url} alt={attachment.name} className="max-h-96 max-w-full rounded-lg" />

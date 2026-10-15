@@ -56,7 +56,9 @@ export interface ExamItem {
     question: string
     question_type: string
     options: Record<string, string>
+    attachments?: NotebookEntry['attachments']
     checking_mode?: string
+    reference_basis?: 'criteria_only' | 'reference_answer'
     criteria?: { score: number; text: string; source: string; scope: string }[]
     correct_answer?: string
     explanation?: string
@@ -77,6 +79,8 @@ export interface ExamAttempt {
   grade_status: string
   scale_message: string
   items: ExamItem[]
+  missing_positions: string[]
+  is_partial: boolean
 }
 export const getPracticeAnalytics = (courseId = '', days = 30, workspaceId?: string) =>
   request<PracticeAnalytics>(
