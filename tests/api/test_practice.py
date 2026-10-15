@@ -559,6 +559,54 @@ def test_short_answer_autocheck_rejects_incomplete_extra_and_rounded(answer):
 
 
 @pytest.mark.parametrize(
+    ("reference", "answer"),
+    [
+        ("15,4", "15,4"),
+        ("15,4", "15.4"),
+        ("0,33", "0,33"),
+        ("0,33", "0.33"),
+        ("-4,5", "-4,5"),
+        ("-4,5", "-4.5"),
+        ("-4,5", "−4,5"),
+        ("16,38", " 16,38 "),
+    ],
+)
+def test_decimal_comma_and_dot_are_the_same_number(reference, answer):
+    """Эталоны ОГЭ пишут дробь через запятую; точка — та же дробь, не список."""
+    entry = {
+        "question_type": "short_answer",
+        "correct_answer": reference,
+        "checking_mode": "auto",
+        "answer_format": "number_or_sequence",
+    }
+    assert check_answer(entry, answer) is True
+
+
+@pytest.mark.parametrize(
+    ("reference", "answer"),
+    [
+        ("15,4", "4,15"),
+        ("15,4", "4.15"),
+        ("0,33", "33,0"),
+        ("-4,5", "5,-4"),
+        ("16,38", "38,16"),
+        ("3,7", "7,3"),
+        ("15,4", "15"),
+        ("15,4", "154"),
+    ],
+)
+def test_decimal_answer_rejects_rearranged_parts(reference, answer):
+    """Переставленные части дроби — другое число, а не тот же набор токенов."""
+    entry = {
+        "question_type": "short_answer",
+        "correct_answer": reference,
+        "checking_mode": "auto",
+        "answer_format": "number_or_sequence",
+    }
+    assert check_answer(entry, answer) is False
+
+
+@pytest.mark.parametrize(
     ("entry", "answer"),
     [
         ({"question_type": "short_answer", "correct_answer": "1", "checking_mode": "auto"}, ""),

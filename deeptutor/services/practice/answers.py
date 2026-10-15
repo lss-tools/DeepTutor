@@ -5,6 +5,17 @@ from __future__ import annotations
 import json
 import re
 
+# A comma wedged between digits is a decimal mark in Russian notation ("15,4"),
+# not a list separator. Spaced or semicolon-separated input stays a list, so a
+# sequence like "-1, 0, 6" keeps splitting into its parts.
+_DECIMAL_MARK = re.compile(r"(?<=\d)[.,](?=\d)")
+
+
+def _decimal_dot(value: str) -> str:
+    if ";" in value or "；" in value or re.search(r"[,，]\s", value):
+        return value
+    return _DECIMAL_MARK.sub(".", value)
+
 
 def check_answer(entry: dict, answer: str) -> bool | None:
     kind = entry.get("question_type", "")
@@ -27,7 +38,7 @@ def check_answer(entry: dict, answer: str) -> bool | None:
             return None
 
         def tokens(value: str) -> list[str]:
-            parts = re.split(r"[;,，；]", value)
+            parts = re.split(r"[;,，；]", _decimal_dot(value))
             normalized = []
             for part in parts:
                 part = re.sub(r"\s+", "", part.strip())
