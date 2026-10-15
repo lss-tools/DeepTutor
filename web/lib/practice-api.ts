@@ -58,6 +58,7 @@ export interface ExamItem {
     options: Record<string, string>
     attachments?: NotebookEntry['attachments']
     checking_mode?: string
+    answer_format?: string
     reference_basis?: 'criteria_only' | 'reference_answer'
     criteria?: { score: number; text: string; source: string; scope: string }[]
     correct_answer?: string

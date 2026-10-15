@@ -94,13 +94,28 @@ class ChatCapability(TurnCapability):
             else "Use this exact question, its verified reference, and these criteria. If the reference "
                  "is missing, unverified, or belongs to another question, request manual review. "
         )
+        # Position 22 answers arrive as coordinates, not as a drawing: the student
+        # lists each piece by its type and defining points. Without this note the
+        # grader has no way to tell a described graph from a bare numeric answer,
+        # and the criterion's split between the graph and the parameter values
+        # cannot be applied.
+        graph_basis = (
+            "This answer describes a graph by coordinates. The student lists every piece with its "
+            "type and defining points (two points for a line, three for a parabola or hyperbola), "
+            "then the punctured points, then the parameter values. Rebuild each piece from its "
+            "points, compare the result with the graph of your own solution, and apply the "
+            "criterion: a correct graph with correct parameter values earns the full score, a "
+            "correct graph alone earns one point, anything else earns zero. "
+            if str(entry.get("answer_format") or "") == "graph_and_parameter"
+            else ""
+        )
         return (
             "\n\n[Official OGE grading context for the single selected question]\n"
             f"Question: {entry['question']}\nReference answer: {entry['correct_answer'] or '(none)'}\n"
             f"Reference status: {entry.get('reference_status') or '(none)'}\n"
             f"Maximum score: {maximum:g}\nCriteria:\n{criteria_lines}\n"
             "If the user explicitly asks you to grade a solution: "
-            f"{grading_basis}"
+            f"{grading_basis}{graph_basis}"
             "When manual review is needed, end with <!--OGE_SCORE: manual_review--> . "
             "Otherwise give a score within the maximum "
             f"and end with <!--OGE_SCORE: score / {maximum:g}; attempt={turn_id}--> . "

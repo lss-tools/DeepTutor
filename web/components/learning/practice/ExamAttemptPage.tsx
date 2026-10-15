@@ -2,7 +2,9 @@
 
 import Link from 'next/link'
 import Markdown from '@/components/common/MarkdownRenderer'
+import GraphCoordinateInput from '@/components/learning/practice/GraphCoordinateInput'
 import PracticeAttachments from '@/components/learning/practice/PracticeAttachments'
+import { parseGraphAnswer } from '@/lib/graph-coordinates'
 import { practiceAssetMarkdown } from '@/lib/practice-content'
 import { LearningErrorState, LearningShell } from '@/components/learning/LearningShell'
 import {
@@ -17,7 +19,7 @@ import {
   type ExamAttempt,
   type ExamReadiness,
 } from '@/lib/practice-api'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuizFollowupController, useFollowupThread } from '@/context/QuizFollowupContext'
 
 const SUBJECTS = [
@@ -32,6 +34,7 @@ export function ExamAttemptPage() {
   const [readiness, setReadiness] = useState<ExamReadiness | null>(null)
   const [attempt, setAttempt] = useState<ExamAttempt | null>(null)
   const [answer, setAnswer] = useState('')
+  const [graphError, setGraphError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [resuming, setResuming] = useState(false)
@@ -40,6 +43,19 @@ export function ExamAttemptPage() {
     () => attempt?.items.find(item => !item.answered) ?? attempt?.items.at(-1) ?? null,
     [attempt]
   )
+  // Position 22 takes a graph. The student describes it by coordinates, and the
+  // editor keeps the serialized description as this position's answer. An answer
+  // the editor cannot read back stays in the plain field, so nothing is lost.
+  const graphInput = Boolean(
+    activeItem
+    && activeItem.question.answer_format === 'graph_and_parameter'
+    && Object.keys(activeItem.question.options).length === 0
+    && (!activeItem.answer || parseGraphAnswer(activeItem.answer))
+  )
+  const handleGraphChange = useCallback((text: string, message: string) => {
+    setAnswer(text)
+    setGraphError(message)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -65,6 +81,7 @@ export function ExamAttemptPage() {
 
   useEffect(() => {
     setAnswer(activeItem?.answer ?? '')
+    setGraphError('')
   }, [activeItem?.position, activeItem?.answer])
 
   async function start() {
@@ -209,6 +226,13 @@ export function ExamAttemptPage() {
                 </label>
               ))}
             </fieldset>
+          ) : graphInput && activeItem ? (
+            <GraphCoordinateInput
+              key={activeItem.position}
+              value={activeItem.answer ?? ''}
+              onChange={handleGraphChange}
+              disabled={busy}
+            />
           ) : (
             <label className="mt-6 block text-sm font-medium">
               Ответ
@@ -229,7 +253,7 @@ export function ExamAttemptPage() {
             </label>
           )}
           <div className="mt-6 flex flex-wrap gap-3">
-            <button type="button" onClick={() => void saveAnswer()} disabled={busy} className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground disabled:opacity-50">
+            <button type="button" onClick={() => void saveAnswer()} disabled={busy || Boolean(graphError)} className="rounded-xl bg-primary px-4 py-2.5 text-sm text-primary-foreground disabled:opacity-50">
               Сохранить ответ
             </button>
             <button type="button" onClick={close} disabled={busy} className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground">

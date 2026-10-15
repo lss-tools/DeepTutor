@@ -30,6 +30,7 @@ def add_math_question(
     reference_status="verified",
     checking_mode="auto",
     max_score=1,
+    answer_format="",
 ):
     async def save():
         await store.ensure_notebook_session("exam-fixture", "Exam fixture")
@@ -50,9 +51,9 @@ def add_math_question(
     with store._connect() as conn:
         conn.execute(
             """UPDATE notebook_entries SET exam_subject='math', kim_year='2027',
-                kim_position=?, max_score=?, checking_mode=?,
+                kim_position=?, max_score=?, checking_mode=?, answer_format=?,
                 reference_status=? WHERE id=?""",
-            (str(position), max_score, checking_mode, reference_status, entry["id"]),
+            (str(position), max_score, checking_mode, answer_format, reference_status, entry["id"]),
         )
         if checking_mode == "model":
             conn.execute(
@@ -268,6 +269,33 @@ def test_exam_snapshot_carries_question_attachments_without_revealing_solution(e
     question = created["items"][0]["question"]
     assert question["attachments"] == [attachment]
     assert "correct_answer" not in question and "explanation" not in question
+
+
+def test_graph_position_exposes_its_answer_format_and_stores_coordinates(exam_client):
+    """Position 22 takes a graph described by coordinates, graded by criteria later."""
+    store, client = exam_client
+    add_math_question(
+        store, 22, checking_mode="model", max_score=2,
+        answer_format="graph_and_parameter",
+    )
+    created = client.post("/practice/exam/math/attempts").json()
+    item = next(item for item in created["items"] if item["position"] == "22")
+    assert item["question"]["answer_format"] == "graph_and_parameter"
+    answer = "\n".join([
+        "График:",
+        "1) парабола через (−4; 0), (−2,5; −2,25), (−1; 0)",
+        "Выколотые точки: (−3; −2)",
+        "Значения параметра: −2,25; −2",
+    ])
+    response = client.put(
+        f"/practice/exam/attempts/{created['attempt_id']}/positions/22",
+        json={"answer": answer},
+    )
+    assert response.status_code == 200
+    stored = next(item for item in response.json()["items"] if item["position"] == "22")
+    assert stored["answer"] == answer
+    assert stored["answered"] is True
+    assert stored["earned_score"] is None
 
 
 def test_import_accepts_criteria_only_model_card_and_rejects_auto_without_answer():

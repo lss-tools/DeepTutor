@@ -104,3 +104,28 @@ def test_verified_criteria_only_grading_uses_criteria_without_demanding_a_refere
     unverified = ChatCapability._oge_grading_instruction({**entry, "reference_status": "unchecked"}, criteria, "turn_unverified")
     assert "graded by its sourced criteria without a reference answer" not in unverified
     assert "request manual review" in unverified
+
+
+def test_graph_answer_grading_explains_the_coordinate_description():
+    """Position 22 arrives as points, so the grader must rebuild the graph first."""
+    entry = {
+        "question": "Build the graph of y = (x+1)(x+4)/(x+3)",
+        "correct_answer": "",
+        "reference_status": "verified",
+        "max_score": 2,
+        "answer_format": "graph_and_parameter",
+    }
+    criteria = [{
+        "score": 2,
+        "text": "2 балла — график и значения параметра верны",
+        "source": "FIPI",
+        "scope": "22",
+    }]
+    instruction = ChatCapability._oge_grading_instruction(entry, criteria, "turn_graph")
+    assert "describes a graph by coordinates" in instruction
+    assert "two points for a line, three for a parabola or hyperbola" in instruction
+    assert "a correct graph alone earns one point" in instruction
+    other = ChatCapability._oge_grading_instruction(
+        {**entry, "answer_format": "expanded_solution"}, criteria, "turn_text"
+    )
+    assert "describes a graph by coordinates" not in other

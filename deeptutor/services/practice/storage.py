@@ -756,6 +756,7 @@ class PracticeStore:
                 "options": options,
                 "attachments": json.loads(snapshot.get("attachments_json") or "[]"),
                 "checking_mode": snapshot.get("checking_mode", ""),
+                "answer_format": snapshot.get("answer_format", ""),
                 "reference_basis": "criteria_only" if not str(snapshot.get("correct_answer") or "").strip() else "reference_answer",
             }
             if snapshot.get("checking_mode") == "model":
